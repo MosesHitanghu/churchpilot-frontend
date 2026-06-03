@@ -1,0 +1,12 @@
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+}
+
+.route-loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: #5f6b7a;
+  font: 600 0.95rem "Poppins", sans-serif;
+}
