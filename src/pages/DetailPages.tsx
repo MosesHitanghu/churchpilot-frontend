@@ -1526,8 +1526,8 @@ export function LocationDetailPage() {
     items: blankRequisitionForm.items.map((item) => ({ ...item })),
   });
   const [reportMenuAnchor, setReportMenuAnchor] = useState<null | HTMLElement>(null);
-  const [selectedReportMenu, setSelectedReportMenu] = useState<ReportMenuOption>("Local");
-  const [reportsView, setReportsView] = useState<ReportsView>("locations");
+  const [selectedReportMenu, setSelectedReportMenu] = useState<ReportMenuOption | null>(null);
+  const [reportsView, setReportsView] = useState<ReportsView>("cards");
   const [reportsViewAnchor, setReportsViewAnchor] = useState<null | HTMLElement>(null);
   const [reportDateFilterOpen, setReportDateFilterOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState({
@@ -3587,13 +3587,16 @@ export function LocationDetailPage() {
     }
   }, [financeView, isOfficeLocation]);
   useEffect(() => {
+    if (selectedReportMenu === null) {
+      return;
+    }
     if (!canUseLocalReports && selectedReportMenu === "Local") {
-      setSelectedReportMenu(receivedReportMenuOption);
+      setSelectedReportMenu(null);
       setReportsView("locations");
       return;
     }
     if (!canUseAllMinistryReports && selectedReportMenu === allMinistryReportsMenuOption) {
-      setSelectedReportMenu(canUseLocalReports ? "Local" : receivedReportMenuOption);
+      setSelectedReportMenu(null);
       setReportsView("locations");
     }
   }, [canUseAllMinistryReports, canUseLocalReports, selectedReportMenu]);
@@ -3895,7 +3898,7 @@ export function LocationDetailPage() {
               label="Reporting Start Date"
               value={toPickerValue(locationForm.reporting_start_date)}
               onChange={(value) => updateLocationForm({ reporting_start_date: fromPickerValue(value) })}
-              slotProps={{ textField: { fullWidth: true, required: true } }}
+              slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
             />
           </LocalizationProvider>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -4220,7 +4223,9 @@ export function LocationDetailPage() {
     ? localReportCards
     : selectedReportMenu === allMinistryReportsMenuOption
       ? allMinistryReportCards
-      : receivedReportCards;
+      : selectedReportMenu === receivedReportMenuOption
+        ? receivedReportCards
+        : [];
   const filteredReportCards = activeReportCards.filter((card) => {
     const searchValue = reportFilters.locationSearch.trim().toLowerCase();
     const sourceTitle = String(card.sourceTitle || location.title || "").toLowerCase();
@@ -4249,12 +4254,16 @@ export function LocationDetailPage() {
     ? [location]
     : selectedReportMenu === allMinistryReportsMenuOption
       ? ministryLocations
-      : receivedReportSenderLocations;
+      : selectedReportMenu === receivedReportMenuOption
+        ? receivedReportSenderLocations
+        : [];
   const forwardedStatCards = selectedReportMenu === "Local"
-    ? localSavedReportCards
+    ? localReportCards
     : selectedReportMenu === allMinistryReportsMenuOption
       ? allMinistryReportCards
-      : receivedReportCards;
+      : selectedReportMenu === receivedReportMenuOption
+        ? receivedReportCards
+        : [];
   const filteredForwardedStatCards = forwardedStatCards.filter((card) => {
     const searchValue = reportFilters.locationSearch.trim().toLowerCase();
     const sourceTitle = String(card.sourceTitle || location.title || "").toLowerCase();
@@ -4313,6 +4322,44 @@ export function LocationDetailPage() {
       .filter(Boolean);
     return mandatoryTypes.length ? mandatoryTypes : defaultMandatoryReportScheduleTypes;
   };
+  const isDueReportScheduleDate = (schedule: Schedule, scheduleDate: string) => (
+    scheduleDate < today()
+    || (scheduleDate === today() && Boolean(schedule.time) && schedule.time! <= dayjs().format("HH:mm:ss"))
+  );
+  const pendingReportCountForLocation = (sender: Location, reports: AggregatedReportCard[], reportingStartDate: string, mandatoryTypes: string[]) => {
+    const effectiveStartDate = reportFilters.startDate || reportingStartDate;
+    if (!effectiveStartDate) {
+      return 0;
+    }
+
+    const reportWindowStart = dayjs(effectiveStartDate);
+    if (!reportWindowStart.isValid() || reportWindowStart.isAfter(dayjs(), "day")) {
+      return 0;
+    }
+
+    const reportWindowEnd = reportFilters.endDate && dayjs(reportFilters.endDate).isValid()
+      ? dayjs(reportFilters.endDate)
+      : dayjs();
+    const senderSchedules = schedules.filter((schedule) => (
+      idsEqual(schedule.location_id, sender.id)
+      && mandatoryTypes.includes(schedule.type || "")
+    ));
+
+    return senderSchedules.reduce((total, schedule) => {
+      const missingOccurrences = occurrenceDates(schedule, reportWindowEnd, effectiveStartDate)
+        .map((occurrence) => occurrence.format("YYYY-MM-DD"))
+        .filter((scheduleDate) => (
+          !dayjs(scheduleDate).isBefore(reportWindowStart, "day")
+          && !dayjs(scheduleDate).isAfter(reportWindowEnd, "day")
+          && isDueReportScheduleDate(schedule, scheduleDate)
+          && !reports.some((card) => (
+            card.scheduleDate === scheduleDate
+            && (card.scheduleTypes.includes(schedule.type || "") || card.scheduleSummaries.some((summary) => summary.id === schedule.id))
+          ))
+        )).length;
+      return total + missingOccurrences;
+    }, 0);
+  };
   const receivedReportLocationStats = activeReportSenderLocations.map((sender) => {
     const reportingStartDate = sender.reporting_start_date && dayjs(sender.reporting_start_date).isValid() ? dayjs(sender.reporting_start_date).format("YYYY-MM-DD") : "";
     const reports = filteredForwardedStatCards
@@ -4328,10 +4375,7 @@ export function LocationDetailPage() {
     const averageCollections = collections / weekCount;
     const averageRemissions = remissions / weekCount;
     const mandatoryTypes = mandatoryTypesForLocation(sender);
-    const hasReachedReportWindow = !reportingStartDate || reportingStartDate < today();
-    const pendingReports = hasReachedReportWindow
-      ? mandatoryTypes.filter((type) => !reports.some((card) => card.scheduleTypes.includes(type))).length
-      : 0;
+    const pendingReports = pendingReportCountForLocation(sender, reports, reportingStartDate, mandatoryTypes);
     const scheduleDateRange = reportCardsScheduleDateRange(reports);
     return { location: sender, reports: reports.length, approved, pending, pendingReports, attendance, collections, remissions, averageAttendance, averageCollections, averageRemissions, weekCount, scheduleDateRange };
   });
@@ -4398,7 +4442,9 @@ export function LocationDetailPage() {
     ? `${location.title || "Location"} Reports`
     : selectedReportMenu === allMinistryReportsMenuOption
       ? "All Ministry Reports"
-      : "Received Reports";
+      : selectedReportMenu === receivedReportMenuOption
+        ? "Received Reports"
+        : "Reports";
   const activeReportsView = selectedReportMenu === allMinistryReportsMenuOption ? "report" : reportsView;
   const forwardReceivingLocationLabel = idsEqual(forwardTargetLocationId, location.id)
     ? (location.is_hq && !automaticReportReceiver ? "None" : location.title || "This location")
@@ -4990,7 +5036,9 @@ export function LocationDetailPage() {
                   selected={option.value === selectedReportMenu}
                   onClick={() => {
                     setSelectedReportMenu(option.value);
-                    if (option.value !== allMinistryReportsMenuOption) {
+                    if (option.value === "Local") {
+                      setReportsView("cards");
+                    } else if (option.value !== allMinistryReportsMenuOption) {
                       setReportsView("locations");
                     }
                     setActiveTab(10);
@@ -5672,7 +5720,7 @@ export function LocationDetailPage() {
                     >
                       Reset
                     </Button>
-                    {selectedReportMenu !== allMinistryReportsMenuOption ? (
+                    {selectedReportMenu && selectedReportMenu !== allMinistryReportsMenuOption ? (
                       <Link component="button" type="button" underline="none" onClick={(event) => setReportsViewAnchor(event.currentTarget)} sx={{ display: "inline-flex", alignItems: "center", gap: 0.4, fontSize: "0.78rem", fontWeight: 700, lineHeight: 1.2, "&:hover": { textDecoration: "none" } }}>
                         <VisibilityIcon sx={{ fontSize: 16 }} />
                         View
@@ -5734,10 +5782,12 @@ export function LocationDetailPage() {
                     </MenuItem>
                   </Menu>
                 </Stack>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
-                    {activeReportsTitle}
-                  </Typography>
-                  {activeReportsView === "cards" ? (
+                  {selectedReportMenu ? (
+                    <>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
+                        {activeReportsTitle}
+                      </Typography>
+                      {activeReportsView === "cards" ? (
                     filteredReportCards.length === 0 ? (
                       <EmptyState title="No reports found" message="Reports matching the current menu and filters will appear here." />
                     ) : (
@@ -5836,11 +5886,15 @@ export function LocationDetailPage() {
                       </Box>
                     )
                   ) : null}
-                  {activeReportsView === "datagrid" ? (
-                    <Paper variant="outlined" sx={{ height: 560, width: "100%" }}>
-                      <DataGrid rows={reportDataGridRows} columns={reportDataGridColumns} pageSizeOptions={[10, 25, 50, 100]} slots={{ toolbar: CustomDataGridToolbar }} showToolbar disableRowSelectionOnClick sx={{ border: 0 }} />
-                    </Paper>
-                  ) : null}
+                      {activeReportsView === "datagrid" ? (
+                        <Paper variant="outlined" sx={{ height: 560, width: "100%" }}>
+                          <DataGrid rows={reportDataGridRows} columns={reportDataGridColumns} pageSizeOptions={[10, 25, 50, 100]} slots={{ toolbar: CustomDataGridToolbar }} showToolbar disableRowSelectionOnClick sx={{ border: 0 }} />
+                        </Paper>
+                      ) : null}
+                    </>
+                  ) : (
+                    <EmptyState title="Select a reports menu" message="Choose Local, Received, or All Ministry Reports from the Reports dropdown." />
+                  )}
                   </Stack>
               </TabPanel>
               <TabPanel value={activeTab} index={12}>
