@@ -1,11 +1,11 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
-import { AppShell } from "./layouts/AppShell";
 import type { Account } from "./lib/api";
 import { getSessionAccount } from "./lib/session";
 import type { AppThemeMode } from "./theme";
 
+const AppShell = lazy(() => import("./layouts/AppShell").then((module) => ({ default: module.AppShell })));
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const FinancialPage = lazy(() => import("./pages/FinancialPage").then((module) => ({ default: module.FinancialPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ default: module.EventsPage })));

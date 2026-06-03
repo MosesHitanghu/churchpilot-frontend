@@ -18,10 +18,11 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { SiteFooter } from "../components/SiteFooter";
 import type { Account } from "../lib/api";
-import { AuthDrawer } from "./AuthPages";
+
+const AuthDrawer = lazy(() => import("./AuthPages").then((module) => ({ default: module.AuthDrawer })));
 
 const features = [
   {
@@ -162,13 +163,17 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
         </Grid>
       </Container>
       <SiteFooter />
-      <AuthDrawer
-        open={authOpen}
-        mode={authMode}
-        onClose={() => setAuthOpen(false)}
-        onModeChange={setAuthMode}
-        onAuthenticated={onAuthenticated}
-      />
+      {authOpen ? (
+        <Suspense fallback={null}>
+          <AuthDrawer
+            open={authOpen}
+            mode={authMode}
+            onClose={() => setAuthOpen(false)}
+            onModeChange={setAuthMode}
+            onAuthenticated={onAuthenticated}
+          />
+        </Suspense>
+      ) : null}
     </Box>
   );
 }
