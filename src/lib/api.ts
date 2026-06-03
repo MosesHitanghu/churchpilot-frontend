@@ -1,12 +1,11 @@
 import axios from "axios";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const defaultApiBaseUrl = import.meta.env.DEV ? "http://127.0.0.1:9000" : "";
+const productionApiBaseUrl = "https://churchpilot-backend.vercel.app";
+const defaultApiBaseUrl = import.meta.env.DEV ? "http://127.0.0.1:9000" : productionApiBaseUrl;
 
 if (!configuredApiBaseUrl && !import.meta.env.DEV) {
-  // Separate Vercel projects need the frontend to know the backend project's URL.
-  // Set VITE_API_BASE_URL in the frontend Vercel project, e.g. https://churchpilot-api.vercel.app.
-  console.warn("VITE_API_BASE_URL is not set; API calls will use the frontend origin.");
+  console.info(`VITE_API_BASE_URL is not set; API calls will use ${productionApiBaseUrl}.`);
 }
 
 export const API_BASE_URL = (configuredApiBaseUrl || defaultApiBaseUrl).replace(
