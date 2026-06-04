@@ -73,6 +73,7 @@ import {
   RadioGroup,
   FormControlLabel,
   InputAdornment,
+  Snackbar,
   Stack,
   Tab,
   Tabs,
@@ -1168,20 +1169,7 @@ function ScheduleCalendar({
     return <EmptyState title="No schedules for this location yet" message="Scheduled activities will appear here after they are created." />;
   }
 
-  const selectedDateText = (selectedScheduleDate || dayjs()).format("YYYY-MM-DD");
   const normalizedScheduleSearch = scheduleSearch.trim().toLowerCase();
-  const filteredSchedules = schedules.filter((schedule) => (
-    scheduleOccursOnDate(schedule, selectedDateText)
-    && (
-      !normalizedScheduleSearch
-      || [
-        schedule.title,
-        schedule.type,
-        schedule.recurrence,
-        scheduleWhenText(schedule),
-      ].filter(Boolean).join(" ").toLowerCase().includes(normalizedScheduleSearch)
-    )
-  ));
   const scheduleDay = renderScheduleAwareDay(schedules, new Set(attendances.map((attendance) => attendance.date).filter(Boolean) as string[]));
   const anchorDate = dayjs(visibleDate);
   const calendarOccurrences: SchedulerEvent[] = schedules.flatMap((schedule) => (
@@ -1254,7 +1242,14 @@ function ScheduleCalendar({
         <Box sx={{ display: "flex", justifyContent: "center", p: { xs: 1.5, sm: 2 } }}>
           <DateCalendar
             value={selectedScheduleDate}
-            onChange={(value) => setSelectedScheduleDate(value)}
+            onChange={(value) => {
+              setSelectedScheduleDate(value);
+              if (value) {
+                setVisibleDate(value.toDate());
+              }
+            }}
+            onMonthChange={(value) => setVisibleDate(value.toDate())}
+            onYearChange={(value) => setVisibleDate(value.toDate())}
             slots={{ day: scheduleDay }}
             sx={{ width: "100%", maxWidth: 420 }}
           />
@@ -1264,10 +1259,10 @@ function ScheduleCalendar({
       <Stack spacing={2} sx={{ p: { xs: 2, sm: 2.5 } }}>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
-            {dayjs(selectedDateText).format("dddd, D MMMM YYYY")}
+            {anchorDate.format("MMMM YYYY")}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {filteredSchedules.length} schedule{filteredSchedules.length === 1 ? "" : "s"} on this date
+            {desktopFilteredSchedules.length} schedule{desktopFilteredSchedules.length === 1 ? "" : "s"} in this month
           </Typography>
         </Box>
         <TextField
@@ -1286,7 +1281,7 @@ function ScheduleCalendar({
           }}
         />
         <List dense disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
-          {filteredSchedules.map((schedule) => (
+          {desktopFilteredSchedules.map((schedule) => (
             <ListItem
               key={schedule.id}
               divider
@@ -1313,9 +1308,9 @@ function ScheduleCalendar({
             </ListItem>
           ))}
         </List>
-        {filteredSchedules.length === 0 ? (
+        {desktopFilteredSchedules.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            No schedules match this date.
+            No schedules match this month.
           </Typography>
         ) : null}
       </Stack>
@@ -1527,7 +1522,7 @@ export function LocationDetailPage() {
   });
   const [reportMenuAnchor, setReportMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedReportMenu, setSelectedReportMenu] = useState<ReportMenuOption | null>(null);
-  const [reportsView, setReportsView] = useState<ReportsView>("cards");
+  const [reportsView, setReportsView] = useState<ReportsView>("locations");
   const [reportsViewAnchor, setReportsViewAnchor] = useState<null | HTMLElement>(null);
   const [reportDateFilterOpen, setReportDateFilterOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState({
@@ -1584,6 +1579,7 @@ export function LocationDetailPage() {
   const [locationChooserOpen, setLocationChooserOpen] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [locationSuccess, setLocationSuccess] = useState("");
   const [locationForm, setLocationForm] = useState({
     title: "",
     type: "Branch",
@@ -1599,6 +1595,7 @@ export function LocationDetailPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [relatedError, setRelatedError] = useState("");
   const [relatedLoading, setRelatedLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [actionOpen, setActionOpen] = useState(false);
   const [actionTab, setActionTab] = useState(1);
   const [actionSaving, setActionSaving] = useState(false);
@@ -1700,89 +1697,64 @@ export function LocationDetailPage() {
 
   const rememberedLocationKey = account ? `church-admin:last-location:${account.id}` : "";
 
-  const loadRelatedRecords = () => {
+  const loadRelatedRecords = (groups: string[] = ["all"]) => {
     if (!locationId) {
       return Promise.resolve();
     }
     const safeGet = <T,>(url: string, fallback: T) => api.get<T>(url).catch(() => ({ data: fallback }));
+    const wants = (group: string) => groups.includes("all") || groups.includes(group);
+    const jobs: Promise<unknown>[] = [];
     setRelatedError("");
     setRelatedLoading(true);
-    return Promise.all([
-      safeGet<Post[]>(`/posts?location_id=${locationId}`, []),
-      safeGet<Member[]>(`/members?location_id=${locationId}`, []),
-      safeGet<Cashbook[]>(`/cashbooks?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<Attendance[]>(`/attendances?location_id=${locationId}`, []),
-      safeGet<Event[]>(`/events?location_id=${locationId}`, []),
-      safeGet<Role[]>(`/roles?location_id=${locationId}`, []),
-      safeGet<Zone[]>(`/zones?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<MissionalFamily[]>(`/missional-families?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<MissionalFamilyMember[]>(`/missional-family-members?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<MfAttendance[]>(`/mf-attendances?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<Schedule[]>(`/schedules?location_id=${locationId}`, []),
-      safeGet<Transaction[]>(`/transactions?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []),
-      safeGet<Particular[]>(`/particulars?location_id=${locationId}`, []),
-      safeGet<Location[]>(`/locations?parent_location_id=${locationId}`, []),
-      safeGet<LocationReport[]>(`/location-reports?location_id=${locationId}`, []),
-      safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?target_location_id=${locationId}`, []),
-      safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?source_location_id=${locationId}`, []),
-      location?.owner_id
-        ? safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?ministry_owner_id=${location.owner_id}`, [])
-        : Promise.resolve({ data: [] as ForwardedLocationReport[] }),
-      safeGet<LocationRemission[]>(`/location-remissions?location_id=${locationId}`, []),
-      safeGet<LocationRequisition[]>(`/requisitions?location_id=${locationId}`, []),
-      safeGet<Record<string, string>>("/system-settings", {}),
-      safeGet<Subscription[]>("/subscriptions", []),
-      safeGet<LocationSubscription[]>(`/location-subscriptions?location_id=${locationId}`, []),
-    ])
-      .then(([
-        postsResponse,
-        membersResponse,
-        cashbooksResponse,
-        attendancesResponse,
-        eventsResponse,
-        rolesResponse,
-        zonesResponse,
-        missionalFamiliesResponse,
-        missionalFamilyMembersResponse,
-        mfAttendancesResponse,
-        schedulesResponse,
-        transactionsResponse,
-        particularsResponse,
-        branchesResponse,
-        locationReportsResponse,
-        receivedReportsResponse,
-        forwardedReportsResponse,
-        ministryForwardedReportsResponse,
-        locationRemissionsResponse,
-        requisitionsResponse,
-        systemSettingsResponse,
-        subscriptionsResponse,
-        locationSubscriptionsResponse,
-      ]) => {
-        setPosts(postsResponse.data);
-        setMembers(membersResponse.data);
-        setCashbooks(cashbooksResponse.data);
-        setAttendances(attendancesResponse.data);
-        setEvents(eventsResponse.data);
-        setRoles(rolesResponse.data);
-        setZones(zonesResponse.data);
-        setMissionalFamilies(missionalFamiliesResponse.data);
-        setMissionalFamilyMembers(missionalFamilyMembersResponse.data);
-        setMfAttendances(mfAttendancesResponse.data);
-        setSchedules(schedulesResponse.data);
-        setLocationTransactions(transactionsResponse.data);
-        setLocationParticulars(particularsResponse.data);
-        setBranches(branchesResponse.data);
-        setLocationReports(locationReportsResponse.data);
-        setReceivedReports(receivedReportsResponse.data);
-        setForwardedReports(forwardedReportsResponse.data);
-        setMinistryForwardedReports(ministryForwardedReportsResponse.data);
-        setLocationRemissions(locationRemissionsResponse.data);
-        setRequisitions(requisitionsResponse.data);
-        setSubscriptionsEnforced(systemSettingsResponse.data.subscriptions_enforced === "true");
-        setSubscriptions(subscriptionsResponse.data);
-        setLocationSubscriptions(locationSubscriptionsResponse.data);
-        const activeAssignment = locationSubscriptionsResponse.data[0];
+    if (wants("posts")) {
+      jobs.push(safeGet<Post[]>(`/posts?location_id=${locationId}`, []).then((response) => setPosts(response.data)));
+    }
+    if (wants("membership")) {
+      jobs.push(safeGet<Member[]>(`/members?location_id=${locationId}`, []).then((response) => setMembers(response.data)));
+      jobs.push(safeGet<Zone[]>(`/zones?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setZones(response.data)));
+      jobs.push(safeGet<MissionalFamily[]>(`/missional-families?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setMissionalFamilies(response.data)));
+      jobs.push(safeGet<MissionalFamilyMember[]>(`/missional-family-members?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setMissionalFamilyMembers(response.data)));
+    }
+    if (wants("finances")) {
+      jobs.push(safeGet<Cashbook[]>(`/cashbooks?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setCashbooks(response.data)));
+      jobs.push(safeGet<LocationRequisition[]>(`/requisitions?location_id=${locationId}`, []).then((response) => setRequisitions(response.data)));
+    }
+    if (wants("attendance")) {
+      jobs.push(safeGet<Attendance[]>(`/attendances?location_id=${locationId}`, []).then((response) => setAttendances(response.data)));
+      jobs.push(safeGet<MfAttendance[]>(`/mf-attendances?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setMfAttendances(response.data)));
+      jobs.push(safeGet<Schedule[]>(`/schedules?location_id=${locationId}`, []).then((response) => setSchedules(response.data)));
+      jobs.push(safeGet<MissionalFamily[]>(`/missional-families?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setMissionalFamilies(response.data)));
+    }
+    if (wants("events")) {
+      jobs.push(safeGet<Event[]>(`/events?location_id=${locationId}`, []).then((response) => setEvents(response.data)));
+    }
+    if (wants("roles") || wants("base")) {
+      jobs.push(safeGet<Role[]>(`/roles?location_id=${locationId}`, []).then((response) => setRoles(response.data)));
+    }
+    if (wants("schedules") || wants("reports")) {
+      jobs.push(safeGet<Schedule[]>(`/schedules?location_id=${locationId}`, []).then((response) => setSchedules(response.data)));
+    }
+    if (wants("reports") || wants("finances")) {
+      jobs.push(safeGet<Transaction[]>(`/transactions?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setLocationTransactions(response.data)));
+      jobs.push(safeGet<Particular[]>(`/particulars?location_id=${locationId}`, []).then((response) => setLocationParticulars(response.data)));
+      jobs.push(safeGet<LocationRemission[]>(`/location-remissions?location_id=${locationId}`, []).then((response) => setLocationRemissions(response.data)));
+    }
+    if (wants("branches")) {
+      jobs.push(safeGet<Location[]>(`/locations?parent_location_id=${locationId}`, []).then((response) => setBranches(response.data)));
+    }
+    if (wants("reports")) {
+      jobs.push(safeGet<LocationReport[]>(`/location-reports?location_id=${locationId}`, []).then((response) => setLocationReports(response.data)));
+      jobs.push(safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?target_location_id=${locationId}`, []).then((response) => setReceivedReports(response.data)));
+      jobs.push(safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?source_location_id=${locationId}`, []).then((response) => setForwardedReports(response.data)));
+      jobs.push((location?.owner_id ? safeGet<ForwardedLocationReport[]>(`/forwarded-location-reports?ministry_owner_id=${location.owner_id}`, []) : Promise.resolve({ data: [] as ForwardedLocationReport[] })).then((response) => setMinistryForwardedReports(response.data)));
+      jobs.push(safeGet<MfAttendance[]>(`/mf-attendances?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`, []).then((response) => setMfAttendances(response.data)));
+    }
+    if (wants("subscriptions") || wants("base")) {
+      jobs.push(safeGet<Record<string, string>>("/system-settings", {}).then((response) => setSubscriptionsEnforced(response.data.subscriptions_enforced === "true")));
+      jobs.push(safeGet<Subscription[]>("/subscriptions", []).then((response) => setSubscriptions(response.data)));
+      jobs.push(safeGet<LocationSubscription[]>(`/location-subscriptions?location_id=${locationId}`, []).then((response) => {
+        setLocationSubscriptions(response.data);
+        const activeAssignment = response.data[0];
         if (activeAssignment) {
           setSubscriptionForm({
             subscription_id: activeAssignment.subscription_id || "",
@@ -1795,7 +1767,10 @@ export function LocationDetailPage() {
             notes: activeAssignment.notes || "",
           });
         }
-      })
+      }));
+    }
+    return Promise.all(jobs)
+      .then(() => undefined)
       .catch((requestError) => {
         setRelatedError(getApiErrorMessage(requestError, "Failed to load location records"));
       })
@@ -1805,8 +1780,35 @@ export function LocationDetailPage() {
   };
 
   useEffect(() => {
-    loadRelatedRecords();
+    loadRelatedRecords(["base", "reports"]);
   }, [locationId, location?.owner_id]);
+
+  useEffect(() => {
+    if (!locationId) {
+      return;
+    }
+    if (activeTab === 0) {
+      void loadRelatedRecords(["posts"]);
+    } else if (activeTab === 1) {
+      void loadRelatedRecords(["membership"]);
+    } else if (activeTab === 2) {
+      void loadRelatedRecords(["finances"]);
+    } else if (activeTab === 3) {
+      void loadRelatedRecords(["attendance"]);
+    } else if (activeTab === 4) {
+      void loadRelatedRecords(["events"]);
+    } else if (activeTab === 5) {
+      void loadRelatedRecords(["roles"]);
+    } else if (activeTab === 8) {
+      void loadRelatedRecords(["schedules", "attendance"]);
+    } else if (activeTab === 9) {
+      void loadRelatedRecords(["branches"]);
+    } else if (activeTab === 10) {
+      void loadRelatedRecords(["reports"]);
+    } else if (activeTab === 12) {
+      void loadRelatedRecords(["subscriptions"]);
+    }
+  }, [activeTab, attendanceSubTab, financeView, locationId, membershipView]);
 
   useEffect(() => {
     api.get<Account[]>("/accounts").then((response) => setAccounts(response.data)).catch(() => setAccounts([]));
@@ -1883,6 +1885,7 @@ export function LocationDetailPage() {
       return;
     }
     setLocationError("");
+    setLocationSuccess("");
     setSavingLocation(true);
     try {
       const response = await api.post<Location>("/locations", {
@@ -1891,11 +1894,14 @@ export function LocationDetailPage() {
         owner_id: account.id,
       });
       await refreshOverview();
-      setLocationDrawerOpen(false);
       resetLocationForm();
+      setLocationSuccess("Location saved successfully.");
+      setFeedback({ severity: "success", message: "Location saved successfully." });
       navigate(`/app/locations/${response.data.id}`);
     } catch (requestError) {
-      setLocationError(getApiErrorMessage(requestError, "Failed to create location"));
+      const message = getApiErrorMessage(requestError, "Failed to create location");
+      setLocationError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setSavingLocation(false);
     }
@@ -2008,11 +2014,13 @@ export function LocationDetailPage() {
           items,
         });
       }
-      setRequisitionDrawerOpen(false);
       setEditingRequisition(null);
       await loadRelatedRecords();
+      setFeedback({ severity: "success", message: `Requisition ${editingRequisition ? "updated" : "created"} successfully.` });
     } catch (requestError) {
-      setRequisitionError(getApiErrorMessage(requestError, `Failed to ${editingRequisition ? "update" : "create"} requisition`));
+      const message = getApiErrorMessage(requestError, `Failed to ${editingRequisition ? "update" : "create"} requisition`);
+      setRequisitionError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setRequisitionSaving(false);
     }
@@ -2698,6 +2706,8 @@ export function LocationDetailPage() {
     }
     closeZoneMenu();
     setActiveTab(7);
+    setActionTab(7);
+    setMembershipView("missionalFamilies");
     setActionForm({
       ...blankActionForm,
       status: "Active",
@@ -3283,15 +3293,18 @@ export function LocationDetailPage() {
       } else if (targetTab === 8) {
         await api.post("/schedules", { ...requesterPayload, location_id: location.id, title: actionForm.title, type: actionForm.type, recurrence: actionForm.recurrence, weekday: actionForm.recurrence === "Weekly" ? Number(actionForm.weekday) : null, date: actionForm.recurrence === "Weekly" ? null : actionForm.date || null, time: actionForm.all_day ? null : actionForm.time || null, end_time: actionForm.all_day ? null : actionForm.end_time || null, all_day: actionForm.all_day });
       } else if (targetTab === 9) {
-        await api.post("/locations", { author_id: account.id, owner_id: location.owner_id || account.id, parent_location_id: location.id, title: actionForm.title, type: actionForm.type || "Branch", description: actionForm.description, email: actionForm.email, phone_number: actionForm.phone_number, country: actionForm.country, district: actionForm.district, city: actionForm.city, address: actionForm.address });
+        await api.post("/locations", { author_id: account.id, owner_id: location.owner_id || account.id, parent_location_id: location.id, title: actionForm.title, type: actionForm.type || "Branch", description: actionForm.description, email: actionForm.email, phone_number: actionForm.phone_number, country: actionForm.country, district: actionForm.district, city: actionForm.city, address: actionForm.address, reporting_start_date: actionForm.start_date || null });
       }
       await loadRelatedRecords();
-      setActionOpen(false);
+      setActionForm(blankActionForm);
+      setFeedback({ severity: "success", message: `${locationTabActions[targetTab] || "Record"} saved successfully.` });
       if (createdCashbookId) {
         navigate(`/app/cashbooks/${createdCashbookId}`, { state: { cashbookReturnTo: `${routerLocation.pathname}${routerLocation.search}` } });
       }
     } catch (requestError) {
-      setActionError(getApiErrorMessage(requestError, "Failed to save record"));
+      const message = getApiErrorMessage(requestError, "Failed to save record");
+      setActionError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setActionSaving(false);
     }
@@ -3335,9 +3348,12 @@ export function LocationDetailPage() {
         loadRelatedRecords(),
         api.get<Account[]>("/accounts").then((response) => setAccounts(response.data)).catch(() => undefined),
       ]);
-      setActionOpen(false);
+      setActionForm(blankActionForm);
+      setFeedback({ severity: "success", message: "Member saved successfully." });
     } catch (requestError) {
-      setActionError(getApiErrorMessage(requestError, "Failed to register member"));
+      const message = getApiErrorMessage(requestError, "Failed to register member");
+      setActionError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setActionSaving(false);
     }
@@ -3600,6 +3616,13 @@ export function LocationDetailPage() {
       setReportsView("locations");
     }
   }, [canUseAllMinistryReports, canUseLocalReports, selectedReportMenu]);
+  useEffect(() => {
+    if (selectedReportMenu !== null || !visibleLocationTabs.includes(10)) {
+      return;
+    }
+    setSelectedReportMenu(canUseLocalReports ? "Local" : receivedReportMenuOption);
+    setReportsView("locations");
+  }, [canUseLocalReports, selectedReportMenu, visibleLocationTabs]);
   const membershipMenuOptions = [
     { value: "members" as const, label: `Members (${members.length})`, icon: <GroupsIcon fontSize="small" /> },
     { value: "zones" as const, label: `Zones (${zones.length})`, icon: <HubIcon fontSize="small" /> },
@@ -3611,8 +3634,8 @@ export function LocationDetailPage() {
     || option.value === "missionalFamilies"
   ));
   const attendanceMenuOptions = [
-    { value: 0, label: `Location (${attendances.length})`, icon: <HomeWorkIcon fontSize="small" /> },
-    { value: 1, label: `Missional Families (${mfAttendances.length})`, icon: <Diversity2Icon fontSize="small" /> },
+    { value: 0, label: "Location", icon: <HomeWorkIcon fontSize="small" /> },
+    { value: 1, label: "Missional Families", icon: <Diversity2Icon fontSize="small" /> },
   ].filter((option) => (
     isLocationManagerForUi
     || !hasScopedLeadershipRole
@@ -3878,6 +3901,7 @@ export function LocationDetailPage() {
           Add a ministry location without leaving this workspace.
         </Typography>
         {locationError ? <Alert severity="error" sx={{ mt: 2 }}>{locationError}</Alert> : null}
+        {locationSuccess ? <Alert severity="success" sx={{ mt: 2 }}>{locationSuccess}</Alert> : null}
         <Stack spacing={2} sx={{ mt: 3 }}>
           <TextField label="Location Name" value={locationForm.title} onChange={(event) => updateLocationForm({ title: event.target.value })} required fullWidth />
           <TextField select label="Location Type" value={locationForm.type} onChange={(event) => updateLocationForm({ type: event.target.value })} fullWidth>
@@ -3886,13 +3910,13 @@ export function LocationDetailPage() {
             ))}
           </TextField>
           <TextField label="Description" value={locationForm.description} onChange={(event) => updateLocationForm({ description: event.target.value })} multiline minRows={3} fullWidth />
-          <EmailField label="Email" value={locationForm.email} onValueChange={(value) => updateLocationForm({ email: value })} fullWidth />
-          <InternationalPhoneField label="Phone Number" country={locationForm.country} value={locationForm.phone_number} onValueChange={(value) => updateLocationForm({ phone_number: value })} fullWidth />
           <GeoFields country={locationForm.country} district={locationForm.district} city={locationForm.city} showCity={false} onChange={updateLocationForm} />
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <CityField country={locationForm.country} district={locationForm.district} city={locationForm.city} onChange={updateLocationForm} />
             <TextField label="Address" value={locationForm.address} onChange={(event) => updateLocationForm({ address: event.target.value })} fullWidth />
           </Stack>
+          <EmailField label="Email" value={locationForm.email} onValueChange={(value) => updateLocationForm({ email: value })} fullWidth />
+          <InternationalPhoneField label="Phone Number" country={locationForm.country} value={locationForm.phone_number} onValueChange={(value) => updateLocationForm({ phone_number: value })} fullWidth />
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <DatePicker
               label="Reporting Start Date"
@@ -3901,12 +3925,12 @@ export function LocationDetailPage() {
               slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
             />
           </LocalizationProvider>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-            <Button variant="outlined" onClick={() => setLocationDrawerOpen(false)} fullWidth>
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" color="secondary" onClick={() => setLocationDrawerOpen(false)} disabled={savingLocation} fullWidth>
               Close
             </Button>
             <Button type="submit" variant="contained" disabled={savingLocation || !locationForm.reporting_start_date} fullWidth>
-              Save
+              {savingLocation ? <CircularProgress size={18} color="inherit" /> : "Save"}
             </Button>
           </Stack>
         </Stack>
@@ -4886,7 +4910,7 @@ export function LocationDetailPage() {
             </>
         }
       />
-      <Stack direction="row" sx={{ display: { xs: "flex", md: "none" }, justifyContent: "flex-start", mb: 2 }}>
+      <Stack direction="row" sx={{ display: { xs: "flex", md: "none" }, justifyContent: "flex-end", mb: 2 }}>
         <Tooltip title="Switch Location">
           <IconButton
             color="secondary"
@@ -5001,7 +5025,7 @@ export function LocationDetailPage() {
                       }}
                       sx={{ display: "inline-flex", alignItems: "center", gap: 0.4 }}
                     >
-                      Membership
+                      Memberships
                       <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
                     </Box>
                   )}
@@ -5063,8 +5087,8 @@ export function LocationDetailPage() {
               slotProps={{ list: { "aria-labelledby": "location-tab-2" } }}
             >
               {[
-                { value: "cashbooks" as const, label: `CashBooks (${cashbooks.length})`, icon: <PaidIcon fontSize="small" /> },
-                ...(!isOfficeLocation ? [{ value: "requisitions" as const, label: `Requisitions (${requisitions.length})`, icon: <ArticleIcon fontSize="small" /> }] : []),
+                { value: "cashbooks" as const, label: "CashBooks", icon: <PaidIcon fontSize="small" /> },
+                ...(!isOfficeLocation ? [{ value: "requisitions" as const, label: "Requisitions", icon: <ArticleIcon fontSize="small" /> }] : []),
               ].map((option) => (
                 <MenuItem
                   key={option.value}
@@ -5121,7 +5145,7 @@ export function LocationDetailPage() {
                 </MenuItem>
               ))}
             </Menu>
-            <Box sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ p: { xs: 2, sm: 3 }, position: "relative" }}>
               <Stack direction="row" sx={{ justifyContent: "flex-end", mb: 2 }}>
                 {canCreateForActiveTab && activeTab !== 1 && activeTab !== 2 && activeTab !== 3 && activeTab !== 10 && activeTab !== 11 ? (
                   <CircularAddButton label={locationTabActions[activeTab]} onClick={() => openActionDrawer(activeTab)} />
@@ -5129,7 +5153,18 @@ export function LocationDetailPage() {
               </Stack>
               {relatedError ? <Alert severity="error" sx={{ mb: 2 }}>{relatedError}</Alert> : null}
               {relatedLoading ? (
-                <Box sx={{ display: "grid", placeItems: "center", minHeight: 240 }}>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 5,
+                    display: "grid",
+                    placeItems: "start center",
+                    pt: 4,
+                    pointerEvents: "none",
+                    bgcolor: "rgba(255, 255, 255, 0.45)",
+                  }}
+                >
                   <CircularProgress />
                 </Box>
               ) : null}
@@ -5731,7 +5766,7 @@ export function LocationDetailPage() {
                   <Menu anchorEl={reportsViewAnchor} open={Boolean(reportsViewAnchor)} onClose={() => setReportsViewAnchor(null)}>
                     {[
                       ["cards", "Reports Cards"],
-                      ["locations", "Locations Cards"],
+                      ["locations", "Location Cards"],
                       ["report", "Report View"],
                       ["datagrid", "Datagrid View"],
                     ].map(([value, label]) => (
@@ -6821,20 +6856,14 @@ export function LocationDetailPage() {
               multiline
               minRows={2}
             />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" } }}>
-              <TextField
-                type="date"
-                label="Date"
-                value={requisitionForm.date}
-                onChange={(event) => setRequisitionForm((current) => ({ ...current, date: event.target.value }))}
-                fullWidth
-                required
-                slotProps={{ inputLabel: { shrink: true } }}
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <DatePicker
+                label="Requisition Date"
+                value={toPickerValue(requisitionForm.date)}
+                onChange={(value) => setRequisitionForm((current) => ({ ...current, date: fromPickerValue(value) }))}
+                slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
               />
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={addRequisitionItem} disabled={!expenseLocationParticulars.length} sx={{ minWidth: 140 }}>
-                Add Item
-              </Button>
-            </Stack>
+            </LocalizationProvider>
             <Stack spacing={1.5}>
               {requisitionForm.items.map((item, index) => (
                 <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
@@ -6863,15 +6892,18 @@ export function LocationDetailPage() {
                 </Paper>
               ))}
             </Stack>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={addRequisitionItem} disabled={!expenseLocationParticulars.length} fullWidth>
+              Add Item
+            </Button>
             {!expenseLocationParticulars.length ? (
               <Alert severity="info">Create expense particulars for this location before preparing requisitions.</Alert>
             ) : null}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-              <Button variant="contained" color="secondary" onClick={closeRequisitionDrawer} fullWidth>
+            <Stack direction="row" spacing={1.5}>
+              <Button variant="outlined" color="secondary" onClick={closeRequisitionDrawer} disabled={requisitionSaving} fullWidth>
                 Close
               </Button>
               <Button variant="contained" onClick={saveRequisition} disabled={requisitionSaving || !expenseLocationParticulars.length} fullWidth>
-                {requisitionSaving ? "Saving..." : editingRequisition ? "Update" : "Save"}
+                {requisitionSaving ? <CircularProgress size={18} color="inherit" /> : editingRequisition ? "Update" : "Save"}
               </Button>
             </Stack>
           </Stack>
@@ -6954,15 +6986,14 @@ export function LocationDetailPage() {
                       label="Date"
                       value={toPickerValue(scheduleEditForm.date)}
                       onChange={(value) => setScheduleEditForm((current) => ({ ...current, date: fromPickerValue(value) }))}
-                      slotProps={{ textField: { fullWidth: true, required: true } }}
+                      slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
                     />
                   )}
-                  <FormControlLabel sx={{ width: "100%", m: 0 }} control={<Checkbox checked={scheduleEditForm.all_day} onChange={(event) => setScheduleEditForm((current) => ({ ...current, all_day: event.target.checked, time: event.target.checked ? "" : current.time, end_time: event.target.checked ? "" : current.end_time }))} />} label="All day" />
                 </Stack>
                 <Stack spacing={1.5} sx={{ width: "100%" }}>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ width: "100%" }}>
-                    <TimePicker label="Start Time" value={toTimePickerValue(scheduleEditForm.time)} onChange={(value) => setScheduleEditForm((current) => ({ ...current, time: fromTimePickerValue(value) }))} disabled={scheduleEditForm.all_day} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { fullWidth: true } }} />
-                    <TimePicker label="End Time" value={toTimePickerValue(scheduleEditForm.end_time)} onChange={(value) => setScheduleEditForm((current) => ({ ...current, end_time: fromTimePickerValue(value) }))} disabled={scheduleEditForm.all_day} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { fullWidth: true } }} />
+                    <TimePicker label="Start Time" value={toTimePickerValue(scheduleEditForm.time)} onChange={(value) => setScheduleEditForm((current) => ({ ...current, time: fromTimePickerValue(value) }))} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { size: "small", fullWidth: true } }} />
+                    <TimePicker label="End Time" value={toTimePickerValue(scheduleEditForm.end_time)} onChange={(value) => setScheduleEditForm((current) => ({ ...current, end_time: fromTimePickerValue(value) }))} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { size: "small", fullWidth: true } }} />
                   </Stack>
                 </Stack>
               </Stack>
@@ -7254,7 +7285,9 @@ export function LocationDetailPage() {
                 Update
               </Button>
             ) : (
-              <CircularAddButton label="Add New" onClick={saveLocationParticular} disabled={!locationParticularForm.title.trim() || !locationParticularForm.category || !locationParticularForm.type} />
+              <Button variant="contained" startIcon={<AddIcon />} onClick={saveLocationParticular} disabled={!locationParticularForm.title.trim() || !locationParticularForm.category || !locationParticularForm.type} sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: "stretch" }}>
+                Add
+              </Button>
             )}
           </Box>
           {editingLocationParticularId ? <Button size="small" onClick={resetLocationParticularForm} sx={{ mb: 2 }}>Cancel Edit</Button> : null}
@@ -7302,7 +7335,7 @@ export function LocationDetailPage() {
           </List>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" color="secondary" onClick={() => setLocationParticularsOpen(false)}>Close</Button>
+          <Button variant="outlined" color="secondary" onClick={() => setLocationParticularsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
       <Dialog open={locationRemissionsOpen} onClose={() => setLocationRemissionsOpen(false)} fullWidth maxWidth="sm">
@@ -7448,6 +7481,18 @@ export function LocationDetailPage() {
         {locationsCard}
       </Drawer>
       {createLocationDrawer}
+      <Snackbar
+        open={Boolean(feedback)}
+        autoHideDuration={4000}
+        onClose={() => setFeedback(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {feedback ? (
+          <Alert severity={feedback.severity} variant="filled" onClose={() => setFeedback(null)}>
+            {feedback.message}
+          </Alert>
+        ) : undefined}
+      </Snackbar>
     </>
   );
 }
@@ -7992,7 +8037,7 @@ function LocationActionDrawer({
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 3 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 900 }}>
-              {activeTab === 5 ? "Assign Role" : actionLabel}
+              {activeTab === 1 ? "Add Members" : activeTab === 5 ? "Assign Role" : activeTab === 7 ? "Add New Missional Family" : activeTab === 8 ? "Create Schedule" : actionLabel}
             </Typography>
           </Box>
         </Stack>
@@ -8000,7 +8045,7 @@ function LocationActionDrawer({
         <LocalizationProvider dateAdapter={AdapterDayjs}>
         <Stack spacing={2}>
           {activeTab === 1 ? (
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <Autocomplete
                 options={memberPersonOptions}
                 value={selectedMemberPerson}
@@ -8039,7 +8084,7 @@ function LocationActionDrawer({
                       height: 40,
                       bgcolor: "primary.main",
                       color: "primary.contrastText",
-                      alignSelf: { xs: "flex-start", sm: "center" },
+                      flex: "0 0 auto",
                       "&:hover": { bgcolor: "primary.dark" },
                       "&.Mui-disabled": { bgcolor: "action.disabledBackground" },
                     }}
@@ -8188,11 +8233,11 @@ function LocationActionDrawer({
                   </Stack>
                 </Box>
               </Box>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Stack direction="row" spacing={2}>
                 <TextField label="First Name" value={form.fname} onChange={(event) => onChange({ fname: event.target.value })} required fullWidth />
                 <TextField label="Last Name" value={form.lname} onChange={(event) => onChange({ lname: event.target.value })} required fullWidth />
               </Stack>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Stack direction="row" spacing={2}>
                 <TextField label="Email" value={form.email} onChange={(event) => onChange({ email: event.target.value })} required={!form.phone_number.trim()} fullWidth />
                 <TextField label="Phone Number" value={form.phone_number} onChange={(event) => onChange({ phone_number: event.target.value })} required={!form.email.trim()} fullWidth />
               </Stack>
@@ -8378,14 +8423,14 @@ function LocationActionDrawer({
                 value={toPickerValue(form.startdate)}
                 onChange={(value) => onChange({ startdate: fromPickerValue(value) })}
                 disableFuture
-                slotProps={{ textField: { fullWidth: true, required: true } }}
+                slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
               />
               <DatePicker
                 label="End Date"
                 value={toPickerValue(form.enddate)}
                 onChange={(value) => onChange({ enddate: fromPickerValue(value) })}
                 disablePast
-                slotProps={{ textField: { fullWidth: true } }}
+                slotProps={{ textField: { size: "small", fullWidth: true } }}
               />
             </>
           ) : null}
@@ -8415,15 +8460,14 @@ function LocationActionDrawer({
                     label="Date"
                     value={toPickerValue(form.date)}
                     onChange={(value) => onChange({ date: fromPickerValue(value) })}
-                    slotProps={{ textField: { fullWidth: true, required: true } }}
+                    slotProps={{ textField: { size: "small", fullWidth: true, required: true } }}
                   />
                 )}
-                <FormControlLabel sx={{ width: "100%", m: 0 }} control={<Checkbox checked={form.all_day} onChange={(event) => onChange({ all_day: event.target.checked, time: event.target.checked ? "" : form.time, end_time: event.target.checked ? "" : form.end_time })} />} label="All day" />
               </Stack>
               <Stack spacing={1.5} sx={{ width: "100%" }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ width: "100%" }}>
-                  <TimePicker label="Start Time" value={toTimePickerValue(form.time)} onChange={(value) => onChange({ time: fromTimePickerValue(value) })} disabled={form.all_day} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { fullWidth: true, required: !form.all_day } }} />
-                  <TimePicker label="End Time" value={toTimePickerValue(form.end_time)} onChange={(value) => onChange({ end_time: fromTimePickerValue(value) })} disabled={form.all_day} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { fullWidth: true, required: !form.all_day } }} />
+                  <TimePicker label="Start Time" value={toTimePickerValue(form.time)} onChange={(value) => onChange({ time: fromTimePickerValue(value) })} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { size: "small", fullWidth: true, required: true } }} />
+                  <TimePicker label="End Time" value={toTimePickerValue(form.end_time)} onChange={(value) => onChange({ end_time: fromTimePickerValue(value) })} ampm views={["hours", "minutes"]} format="hh:mm a" slotProps={{ textField: { size: "small", fullWidth: true, required: true } }} />
                 </Stack>
               </Stack>
             </Stack>
@@ -8509,20 +8553,26 @@ function LocationActionDrawer({
               </Stack>
               <TextField label="City" value={form.city} onChange={(event) => onChange({ city: event.target.value })} fullWidth />
               <TextField label="Address" value={form.address} onChange={(event) => onChange({ address: event.target.value })} fullWidth />
+              <DatePicker
+                label="Reporting Start Date"
+                value={toPickerValue(form.start_date)}
+                onChange={(value) => onChange({ start_date: fromPickerValue(value) })}
+                slotProps={{ textField: { size: "small", fullWidth: true } }}
+              />
             </>
           ) : null}
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-            <Button variant="contained" color="secondary" onClick={onClose} fullWidth>
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" color="secondary" onClick={onClose} disabled={saving} fullWidth>
               Close
             </Button>
             {activeTab === 1 ? null : (
               <Button variant="contained" onClick={onSave} disabled={actionSaveDisabled} fullWidth>
-                Save
+                {saving ? <CircularProgress size={18} color="inherit" /> : "Save"}
               </Button>
             )}
             {activeTab === 1 ? (
               <Button variant="outlined" onClick={onRegisterMember} disabled={memberRegisterDisabled} fullWidth>
-                Register
+                {saving ? <CircularProgress size={18} color="inherit" /> : "Register"}
               </Button>
             ) : null}
           </Stack>
@@ -8582,6 +8632,7 @@ export function CashbookDetailPage() {
   const [permissionForm, setPermissionForm] = useState({ user_id: "", role: "" });
   const [transactionError, setTransactionError] = useState("");
   const [transactionSuccess, setTransactionSuccess] = useState("");
+  const [transactionSaving, setTransactionSaving] = useState(false);
   const [transactionValidation, setTransactionValidation] = useState<Record<string, string>>({});
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [transactionTab, setTransactionTab] = useState("normal");
@@ -8953,6 +9004,7 @@ export function CashbookDetailPage() {
     if (Object.keys(validation).length > 0) {
       return;
     }
+    setTransactionSaving(true);
     try {
       await api.post("/transactions", {
         requester_id: account.id,
@@ -8983,9 +9035,10 @@ export function CashbookDetailPage() {
       });
       setTransactionValidation({});
       setTransactionSuccess("Transaction saved successfully.");
-      setAddTransactionOpen(false);
     } catch (requestError) {
       setTransactionError(getApiErrorMessage(requestError, "Failed to save transaction"));
+    } finally {
+      setTransactionSaving(false);
     }
   };
 
@@ -9023,6 +9076,7 @@ export function CashbookDetailPage() {
     if (Object.keys(validation).length > 0) {
       return;
     }
+    setTransactionSaving(true);
     try {
       await Promise.all(rows.map((row) => api.post("/transactions", {
         requester_id: account.id,
@@ -9048,9 +9102,10 @@ export function CashbookDetailPage() {
       });
       setScheduleCollectionValidation({});
       setTransactionSuccess("Schedule collections saved successfully.");
-      setAddTransactionOpen(false);
     } catch (requestError) {
       setTransactionError(getApiErrorMessage(requestError, "Failed to save schedule collections"));
+    } finally {
+      setTransactionSaving(false);
     }
   };
 
@@ -9516,6 +9571,15 @@ export function CashbookDetailPage() {
                   }}
                   slotProps={{ textField: { size: "small", fullWidth: true, required: true, error: Boolean(transactionValidation.transaction_date), helperText: transactionValidation.transaction_date } }}
                 />
+                <TextField select label="Particular" value={transactionForm.particular_id} onChange={(event) => {
+                  setTransactionValidation((current) => ({ ...current, particular_id: "" }));
+                  setTransactionForm((current) => ({ ...current, particular_id: event.target.value }));
+                }} size="small" fullWidth required error={Boolean(transactionValidation.particular_id)} helperText={transactionValidation.particular_id}>
+                  <MenuItem value="">Select particular</MenuItem>
+                  {generalParticulars.map((particular) => (
+                    <MenuItem key={particular.particular_id} value={particular.particular_id}>{particular.title}</MenuItem>
+                  ))}
+                </TextField>
                 <TextField select label="Type" value={transactionForm.category} onChange={(event) => {
                   setTransactionValidation((current) => ({ ...current, category: "" }));
                   setTransactionForm((current) => ({ ...current, category: event.target.value }));
@@ -9528,15 +9592,6 @@ export function CashbookDetailPage() {
                   setTransactionValidation((current) => ({ ...current, amount: "" }));
                   setTransactionForm((current) => ({ ...current, amount: event.target.value }));
                 }} size="small" fullWidth required error={Boolean(transactionValidation.amount)} helperText={transactionValidation.amount} />
-                <TextField select label="Particular" value={transactionForm.particular_id} onChange={(event) => {
-                  setTransactionValidation((current) => ({ ...current, particular_id: "" }));
-                  setTransactionForm((current) => ({ ...current, particular_id: event.target.value }));
-                }} size="small" fullWidth required error={Boolean(transactionValidation.particular_id)} helperText={transactionValidation.particular_id}>
-                  <MenuItem value="">Select particular</MenuItem>
-                  {generalParticulars.map((particular) => (
-                    <MenuItem key={particular.particular_id} value={particular.particular_id}>{particular.title}</MenuItem>
-                  ))}
-                </TextField>
                 <TextField select label="Mode" value={transactionForm.mode} onChange={(event) => {
                   setTransactionValidation((current) => ({ ...current, mode: "" }));
                   setTransactionForm((current) => ({ ...current, mode: event.target.value }));
@@ -9553,10 +9608,10 @@ export function CashbookDetailPage() {
                   variant="contained"
                   onClick={addTransaction}
                   startIcon={<SaveIcon />}
-                  disabled={!transactionForm.category || !transactionForm.particular_id || !transactionForm.mode}
+                  disabled={transactionSaving || !transactionForm.category || !transactionForm.particular_id || !transactionForm.mode}
                   sx={{ minWidth: 120, alignSelf: { xs: "stretch", md: "center" } }}
                 >
-                  Save
+                  {transactionSaving ? <CircularProgress size={18} color="inherit" /> : "Save"}
                 </Button>
               </Box>
             </Stack>
@@ -9647,10 +9702,10 @@ export function CashbookDetailPage() {
                   variant="contained"
                   onClick={saveScheduleCollections}
                   startIcon={<SaveIcon />}
-                  disabled={!scheduleCollectionForm.schedule_date || !scheduleCollectionForm.particular_id || !scheduleCollectionForm.mode}
+                  disabled={transactionSaving || !scheduleCollectionForm.schedule_date || !scheduleCollectionForm.particular_id || !scheduleCollectionForm.mode}
                   sx={{ minWidth: 170, alignSelf: { xs: "stretch", md: "center" } }}
                 >
-                  Save Collections
+                  {transactionSaving ? <CircularProgress size={18} color="inherit" /> : "Save Collections"}
                 </Button>
               </Box>
             </Stack>
@@ -9658,7 +9713,7 @@ export function CashbookDetailPage() {
           </LocalizationProvider>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setAddTransactionOpen(false)}>Close</Button>
+            <Button variant="outlined" color="secondary" onClick={() => setAddTransactionOpen(false)} disabled={transactionSaving}>Close</Button>
           </DialogActions>
         </Dialog>
       ) : null}
@@ -10082,7 +10137,9 @@ export function CashbookDetailPage() {
                 Update
               </Button>
             ) : (
-              <CircularAddButton label="Add New" onClick={saveParticular} disabled={!particularForm.title.trim() || !particularForm.category || !particularForm.type} />
+              <Button variant="contained" startIcon={<AddIcon />} onClick={saveParticular} disabled={!particularForm.title.trim() || !particularForm.category || !particularForm.type} sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: "stretch" }}>
+                Add
+              </Button>
             )}
           </Box>
           {editingParticularId ? <Button size="small" onClick={resetParticularForm} sx={{ mb: 2 }}>Cancel Edit</Button> : null}
@@ -10130,7 +10187,7 @@ export function CashbookDetailPage() {
           </List>
         </DialogContent>
         <DialogActions>
-          <Button variant="contained" color="secondary" onClick={() => setParticularsOpen(false)}>Close</Button>
+          <Button variant="outlined" color="secondary" onClick={() => setParticularsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

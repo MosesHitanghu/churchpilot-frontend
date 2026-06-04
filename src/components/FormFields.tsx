@@ -161,7 +161,7 @@ export function CityField({ country, district, city, onChange }: GeoFieldsProps)
         onChange({ country, district, city: nextValue });
       }}
       getOptionLabel={(option) => (typeof option === "string" ? option : option.label)}
-      renderInput={(params) => <TextField {...params} label="City, Division, Parish, or Village" fullWidth />}
+      renderInput={(params) => <TextField {...params} label="City/Area" fullWidth />}
       fullWidth
     />
   );
