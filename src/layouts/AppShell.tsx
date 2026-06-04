@@ -188,7 +188,11 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       }
       if (!hasOpenOverlay && overlayHistoryRef.current && !overlayClosingRef.current) {
         overlayHistoryRef.current = false;
-        window.history.back();
+        window.history.replaceState(
+          { ...(window.history.state || {}), churchPilotOverlayOpen: false },
+          "",
+          window.location.href,
+        );
       }
     };
 
@@ -230,6 +234,18 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       window.history.back();
       setOpen(false);
       return;
+    }
+    setOpen(false);
+  };
+
+  const closeDrawerForNavigation = () => {
+    if (isMobile && drawerHistoryRef.current) {
+      drawerHistoryRef.current = false;
+      window.history.replaceState(
+        { ...(window.history.state || {}), churchPilotDrawerOpen: false },
+        "",
+        window.location.href,
+      );
     }
     setOpen(false);
   };
@@ -382,7 +398,11 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
                     component={RouterLink}
                     to={itemPath}
                     selected={selected}
-                    onClick={() => { if (isMobile) closeDrawer(); }}
+                    onClick={() => {
+                      if (isMobile) {
+                        closeDrawerForNavigation();
+                      }
+                    }}
                     sx={{ minHeight: 48, justifyContent: { xs: "initial", md: open ? "initial" : "center" }, px: 2.5 }}
                   >
                     <ListItemIcon sx={{ minWidth: 0, mr: { xs: 2, md: open ? 2 : "auto" }, justifyContent: "center" }}>

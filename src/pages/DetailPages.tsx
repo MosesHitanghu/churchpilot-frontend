@@ -5709,7 +5709,9 @@ export function LocationDetailPage() {
                 }
                 onClick={() => {
                   setLocationChooserOpen(false);
-                  navigate(`/app/locations/${item.id}`);
+                  window.setTimeout(() => {
+                    navigate(`/app/locations/${item.id}`);
+                  }, 0);
                 }}
                 dense
               >
