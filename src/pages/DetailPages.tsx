@@ -2383,11 +2383,9 @@ export function LocationDetailPage() {
     ? `church-admin:last-location:${account.id}`
     : "";
   const activeLocationIdRef = useRef(locationId);
-  const relatedLoadTokenRef = useRef(0);
+  activeLocationIdRef.current = locationId;
 
   useEffect(() => {
-    activeLocationIdRef.current = locationId;
-    relatedLoadTokenRef.current += 1;
     setLocationChooserOpen(false);
     setRelatedError("");
     setRelatedLoading(false);
@@ -2423,9 +2421,7 @@ export function LocationDetailPage() {
     if (!idsEqual(location.id, requestLocationId)) {
       return Promise.resolve();
     }
-    const loadToken = ++relatedLoadTokenRef.current;
     const canApplyRelatedLoad = () =>
-      relatedLoadTokenRef.current === loadToken &&
       idsEqual(requestLocationId, activeLocationIdRef.current);
     const applyResponse =
       <T,>(setter: (value: T) => void) =>
@@ -4813,7 +4809,7 @@ export function LocationDetailPage() {
           reporting_start_date: actionForm.start_date || null,
         });
       }
-      await loadRelatedRecords();
+      await loadRelatedRecords(targetTab === 3 ? ["attendance"] : ["all"]);
       setActionForm(blankActionForm);
       setFeedback({
         severity: "success",
