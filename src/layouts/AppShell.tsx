@@ -37,7 +37,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
 import { SiteFooter } from "../components/SiteFooter";
@@ -68,6 +68,9 @@ const navItems = [
 
 export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccountUpdated }: AppShellProps) {
   const [open, setOpen] = useState(false);
+  const drawerHistoryRef = useRef(false);
+  const overlayHistoryRef = useRef(false);
+  const overlayClosingRef = useRef(false);
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<null | HTMLElement>(null);
@@ -108,6 +111,110 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
     document.title = `ChurchPilot | ${currentPageTitle}`;
   }, [currentPageTitle]);
 
+  useEffect(() => {
+    const handlePopState = () => {
+      if (drawerHistoryRef.current) {
+        drawerHistoryRef.current = false;
+        setOpen(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) {
+      overlayHistoryRef.current = false;
+      return undefined;
+    }
+
+    const getOpenOverlayRoots = () => Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".MuiDialog-root, .MuiDrawer-root:not([data-churchpilot-nav-drawer='true'])",
+      ),
+    ).filter((element) => {
+      const styles = window.getComputedStyle(element);
+      return element.getAttribute("aria-hidden") !== "true" && styles.display !== "none" && styles.visibility !== "hidden";
+    });
+
+    const closeTopOverlay = () => {
+      const overlays = getOpenOverlayRoots();
+      const topOverlay = overlays[overlays.length - 1];
+      if (!topOverlay) {
+        return;
+      }
+      const backdrop = topOverlay.querySelector<HTMLElement>(".MuiBackdrop-root");
+      if (backdrop) {
+        backdrop.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        backdrop.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        return;
+      }
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    };
+
+    const syncOverlayHistory = () => {
+      const hasOpenOverlay = getOpenOverlayRoots().length > 0;
+      if (hasOpenOverlay && !overlayHistoryRef.current && !overlayClosingRef.current) {
+        window.history.pushState({ ...(window.history.state || {}), churchPilotOverlayOpen: true }, "", window.location.href);
+        overlayHistoryRef.current = true;
+      }
+      if (!hasOpenOverlay && overlayHistoryRef.current && !overlayClosingRef.current) {
+        overlayHistoryRef.current = false;
+        window.history.back();
+      }
+    };
+
+    const handlePopState = () => {
+      if (!overlayHistoryRef.current) {
+        return;
+      }
+      overlayHistoryRef.current = false;
+      overlayClosingRef.current = true;
+      closeTopOverlay();
+      window.setTimeout(() => {
+        overlayClosingRef.current = false;
+        syncOverlayHistory();
+      }, 120);
+    };
+
+    const observer = new MutationObserver(syncOverlayHistory);
+    observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+    window.addEventListener("popstate", handlePopState);
+    syncOverlayHistory();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isMobile]);
+
+  const openDrawer = () => {
+    if (isMobile && !drawerHistoryRef.current) {
+      window.history.pushState({ ...(window.history.state || {}), churchPilotDrawerOpen: true }, "", window.location.href);
+      drawerHistoryRef.current = true;
+    }
+    setOpen(true);
+  };
+
+  const closeDrawer = () => {
+    if (isMobile && drawerHistoryRef.current) {
+      drawerHistoryRef.current = false;
+      window.history.back();
+      setOpen(false);
+      return;
+    }
+    setOpen(false);
+  };
+
+  const toggleDrawer = () => {
+    if (open) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  };
+
   const handleLogout = () => {
     clearSessionAccount();
     onLogout();
@@ -132,12 +239,12 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       >
         <Toolbar>
           <Tooltip title={isMobile ? "Open menu" : open ? "Collapse menu" : "Expand menu"}>
-            <IconButton color="inherit" edge="start" onClick={() => setOpen((current) => !current)}>
+            <IconButton color="inherit" edge="start" onClick={toggleDrawer}>
               <MenuIcon />
             </IconButton>
           </Tooltip>
-          <Typography variant="h6" sx={{ flexGrow: 1, ml: 2, fontWeight: 900, display: { xs: "none", sm: "block" } }}>
-            {currentPageTitle}
+          <Typography variant="h6" sx={{ flexGrow: 1, ml: 2, fontWeight: 900, display: "block", minWidth: 0 }} noWrap>
+            {isMobile ? "ChurchPilot" : currentPageTitle}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 } }}>
             <Box
@@ -209,8 +316,9 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       <Drawer
         variant={isMobile ? "temporary" : "permanent"}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeDrawer}
         ModalProps={{ keepMounted: true }}
+        slotProps={{ root: { "data-churchpilot-nav-drawer": "true" } as Record<string, string> }}
         sx={{
           width: { xs: 0, md: open ? drawerWidth : closedWidth },
           flexShrink: 0,
@@ -247,7 +355,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
                     component={RouterLink}
                     to={itemPath}
                     selected={selected}
-                    onClick={() => { if (isMobile) setOpen(false); }}
+                    onClick={() => { if (isMobile) closeDrawer(); }}
                     sx={{ minHeight: 48, justifyContent: { xs: "initial", md: open ? "initial" : "center" }, px: 2.5 }}
                   >
                     <ListItemIcon sx={{ minWidth: 0, mr: { xs: 2, md: open ? 2 : "auto" }, justifyContent: "center" }}>
