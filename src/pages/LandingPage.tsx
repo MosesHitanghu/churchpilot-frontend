@@ -46,7 +46,7 @@ const features = [
     icon: <StorageIcon />,
   },
   {
-    title: "Reports & Approvals",
+    title: "Reporting",
     description: "Create location reports, forward submissions, approve reports, and track ministry accountability.",
     icon: <AssignmentTurnedInIcon />,
   },
