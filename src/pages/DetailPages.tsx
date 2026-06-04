@@ -2248,7 +2248,6 @@ export function LocationDetailPage() {
     district: "",
     city: "",
     address: "",
-    reporting_start_date: "",
   });
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [relatedError, setRelatedError] = useState("");
@@ -2406,7 +2405,6 @@ export function LocationDetailPage() {
       district: "",
       city: "",
       address: "",
-      reporting_start_date: "",
     });
   };
 
@@ -4859,7 +4857,6 @@ export function LocationDetailPage() {
           district: actionForm.district,
           city: actionForm.city,
           address: actionForm.address,
-          reporting_start_date: actionForm.start_date || null,
         });
       }
       await loadRelatedRecords(targetTab === 3 ? ["attendance"] : ["all"]);
@@ -5891,25 +5888,6 @@ export function LocationDetailPage() {
             }
             fullWidth
           />
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <DatePicker
-              label="Reporting Start Date"
-              value={toPickerValue(locationForm.reporting_start_date)}
-              onChange={(value) =>
-                updateLocationForm({
-                  reporting_start_date: fromPickerValue(value),
-                })
-              }
-              slotProps={{
-                textField: {
-                  size: "small",
-                  fullWidth: true,
-                  required:
-                    (locationForm.type || "").toLowerCase() !== "office",
-                },
-              }}
-            />
-          </LocalizationProvider>
           <Stack direction="row" spacing={1.5}>
             <Button
               variant="outlined"
@@ -5923,11 +5901,7 @@ export function LocationDetailPage() {
             <Button
               type="submit"
               variant="contained"
-              disabled={
-                savingLocation ||
-                ((locationForm.type || "").toLowerCase() !== "office" &&
-                  !locationForm.reporting_start_date)
-              }
+              disabled={savingLocation}
               fullWidth
             >
               {savingLocation ? (
@@ -12949,19 +12923,6 @@ export function LocationDetailPage() {
               fullWidth
             />
             <TextField
-              type="date"
-              label="Reporting Start Date"
-              value={locationEditForm.reporting_start_date}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  reporting_start_date: event.target.value,
-                }))
-              }
-              fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
               label="Email"
               value={locationEditForm.email}
               onChange={(event) =>
@@ -13028,6 +12989,19 @@ export function LocationDetailPage() {
                 }))
               }
               fullWidth
+            />
+            <TextField
+              type="date"
+              label="Reporting Start Date"
+              value={locationEditForm.reporting_start_date}
+              onChange={(event) =>
+                setLocationEditForm((current) => ({
+                  ...current,
+                  reporting_start_date: event.target.value,
+                }))
+              }
+              fullWidth
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <Stack direction="row" spacing={1.5}>
               <Button
@@ -15506,14 +15480,6 @@ function LocationActionDrawer({
                     onChange({ address: event.target.value })
                   }
                   fullWidth
-                />
-                <DatePicker
-                  label="Reporting Start Date"
-                  value={toPickerValue(form.start_date)}
-                  onChange={(value) =>
-                    onChange({ start_date: fromPickerValue(value) })
-                  }
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
                 />
               </>
             ) : null}
