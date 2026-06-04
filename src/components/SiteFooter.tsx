@@ -42,7 +42,7 @@ export function SiteFooter({ contained = true }: SiteFooterProps) {
     <Box
       component="footer"
       sx={{
-        bgcolor: "#111827",
+        bgcolor: "primary.main",
         color: "common.white",
         borderTop: 1,
         borderColor: "rgba(255,255,255,0.14)",

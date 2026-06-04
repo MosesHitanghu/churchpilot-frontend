@@ -1180,26 +1180,43 @@ function formatDisplayDate(value?: string | null) {
 }
 
 function useResource<T>(url: string | null) {
-  const [data, setData] = useState<T | null>(null);
+  const [resource, setResource] = useState<{
+    data: T | null;
+    url: string | null;
+  }>({ data: null, url: null });
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     if (!url) {
-      setData(null);
+      setResource({ data: null, url: null });
       setError("");
       return;
     }
-    setData(null);
+    setResource({ data: null, url });
     setError("");
     api
       .get<T>(url)
-      .then((response) => setData(response.data))
-      .catch((requestError) =>
-        setError(getApiErrorMessage(requestError, "Failed to load resource")),
-      );
+      .then((response) => {
+        if (!cancelled) {
+          setResource({ data: response.data, url });
+        }
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
+          setError(getApiErrorMessage(requestError, "Failed to load resource"));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
 
-  return { data, setData, error };
+  return {
+    data: resource.url === url ? resource.data : null,
+    setData: (data: T | null) => setResource({ data, url }),
+    error,
+  };
 }
 
 function LoadingOrError({ error }: { error: string }) {
@@ -2365,11 +2382,58 @@ export function LocationDetailPage() {
   const rememberedLocationKey = account
     ? `church-admin:last-location:${account.id}`
     : "";
+  const activeLocationIdRef = useRef(locationId);
+  const relatedLoadTokenRef = useRef(0);
+
+  useEffect(() => {
+    activeLocationIdRef.current = locationId;
+    relatedLoadTokenRef.current += 1;
+    setLocationChooserOpen(false);
+    setRelatedError("");
+    setRelatedLoading(false);
+    setPosts([]);
+    setMembers([]);
+    setZones([]);
+    setMissionalFamilies([]);
+    setMissionalFamilyMembers([]);
+    setCashbooks([]);
+    setRequisitions([]);
+    setAttendances([]);
+    setMfAttendances([]);
+    setEvents([]);
+    setRoles([]);
+    setSchedules([]);
+    setBranches([]);
+    setLocationReports([]);
+    setReceivedReports([]);
+    setForwardedReports([]);
+    setMinistryForwardedReports([]);
+    setLocationTransactions([]);
+    setLocationParticulars([]);
+    setLocationRemissions([]);
+    setLocationSubscriptions([]);
+  }, [locationId]);
 
   const loadRelatedRecords = (groups: string[] = ["all"]) => {
     if (!locationId || !location) {
       return Promise.resolve();
     }
+    const requestLocationId = locationId;
+    const requestOwnerId = location.owner_id;
+    if (!idsEqual(location.id, requestLocationId)) {
+      return Promise.resolve();
+    }
+    const loadToken = ++relatedLoadTokenRef.current;
+    const canApplyRelatedLoad = () =>
+      relatedLoadTokenRef.current === loadToken &&
+      idsEqual(requestLocationId, activeLocationIdRef.current);
+    const applyResponse =
+      <T,>(setter: (value: T) => void) =>
+      (response: { data: T }) => {
+        if (canApplyRelatedLoad()) {
+          setter(response.data);
+        }
+      };
     const safeGet = <T,>(url: string, fallback: T) =>
       api.get<T>(url).catch(() => ({ data: fallback }));
     const wants = (group: string) =>
@@ -2379,178 +2443,185 @@ export function LocationDetailPage() {
     setRelatedLoading(true);
     if (wants("posts")) {
       jobs.push(
-        safeGet<Post[]>(`/posts?location_id=${locationId}`, []).then(
-          (response) => setPosts(response.data),
+        safeGet<Post[]>(`/posts?location_id=${requestLocationId}`, []).then(
+          applyResponse(setPosts),
         ),
       );
     }
     if (wants("membership")) {
       jobs.push(
-        safeGet<Member[]>(`/members?location_id=${locationId}`, []).then(
-          (response) => setMembers(response.data),
+        safeGet<Member[]>(`/members?location_id=${requestLocationId}`, []).then(
+          applyResponse(setMembers),
         ),
       );
       jobs.push(
         safeGet<Zone[]>(
-          `/zones?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/zones?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setZones(response.data)),
+        ).then(applyResponse(setZones)),
       );
       jobs.push(
         safeGet<MissionalFamily[]>(
-          `/missional-families?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/missional-families?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setMissionalFamilies(response.data)),
+        ).then(applyResponse(setMissionalFamilies)),
       );
       jobs.push(
         safeGet<MissionalFamilyMember[]>(
-          `/missional-family-members?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/missional-family-members?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setMissionalFamilyMembers(response.data)),
+        ).then(applyResponse(setMissionalFamilyMembers)),
       );
     }
     if (wants("finances")) {
       jobs.push(
         safeGet<Cashbook[]>(
-          `/cashbooks?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/cashbooks?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setCashbooks(response.data)),
+        ).then(applyResponse(setCashbooks)),
       );
       jobs.push(
         safeGet<LocationRequisition[]>(
-          `/requisitions?location_id=${locationId}`,
+          `/requisitions?location_id=${requestLocationId}`,
           [],
-        ).then((response) => setRequisitions(response.data)),
+        ).then(applyResponse(setRequisitions)),
       );
     }
     if (wants("attendance")) {
       jobs.push(
         safeGet<Attendance[]>(
-          `/attendances?location_id=${locationId}`,
+          `/attendances?location_id=${requestLocationId}`,
           [],
-        ).then((response) => setAttendances(response.data)),
+        ).then(applyResponse(setAttendances)),
       );
       jobs.push(
         safeGet<MfAttendance[]>(
-          `/mf-attendances?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/mf-attendances?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setMfAttendances(response.data)),
+        ).then(applyResponse(setMfAttendances)),
       );
       jobs.push(
-        safeGet<Schedule[]>(`/schedules?location_id=${locationId}`, []).then(
-          (response) => setSchedules(response.data),
+        safeGet<Schedule[]>(`/schedules?location_id=${requestLocationId}`, []).then(
+          applyResponse(setSchedules),
         ),
       );
       jobs.push(
         safeGet<MissionalFamily[]>(
-          `/missional-families?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/missional-families?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setMissionalFamilies(response.data)),
+        ).then(applyResponse(setMissionalFamilies)),
       );
     }
     if (wants("events")) {
       jobs.push(
-        safeGet<Event[]>(`/events?location_id=${locationId}`, []).then(
-          (response) => setEvents(response.data),
+        safeGet<Event[]>(`/events?location_id=${requestLocationId}`, []).then(
+          applyResponse(setEvents),
         ),
       );
     }
     if (wants("roles") || wants("base")) {
       jobs.push(
-        safeGet<Role[]>(`/roles?location_id=${locationId}`, []).then(
-          (response) => setRoles(response.data),
+        safeGet<Role[]>(`/roles?location_id=${requestLocationId}`, []).then(
+          applyResponse(setRoles),
         ),
       );
     }
     if (wants("schedules") || wants("reports")) {
       jobs.push(
-        safeGet<Schedule[]>(`/schedules?location_id=${locationId}`, []).then(
-          (response) => setSchedules(response.data),
+        safeGet<Schedule[]>(`/schedules?location_id=${requestLocationId}`, []).then(
+          applyResponse(setSchedules),
         ),
       );
     }
     if (wants("reports") || wants("finances")) {
       jobs.push(
         safeGet<Transaction[]>(
-          `/transactions?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/transactions?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setLocationTransactions(response.data)),
+        ).then(applyResponse(setLocationTransactions)),
       );
       jobs.push(
         safeGet<Particular[]>(
-          `/particulars?location_id=${locationId}`,
+          `/particulars?location_id=${requestLocationId}`,
           [],
-        ).then((response) => setLocationParticulars(response.data)),
+        ).then(applyResponse(setLocationParticulars)),
       );
       jobs.push(
         safeGet<LocationRemission[]>(
-          `/location-remissions?location_id=${locationId}`,
+          `/location-remissions?location_id=${requestLocationId}`,
           [],
-        ).then((response) => setLocationRemissions(response.data)),
+        ).then(applyResponse(setLocationRemissions)),
       );
     }
     if (wants("branches")) {
       jobs.push(
         safeGet<Location[]>(
-          `/locations?parent_location_id=${locationId}`,
+          `/locations?parent_location_id=${requestLocationId}`,
           [],
-        ).then((response) => setBranches(response.data)),
+        ).then(applyResponse(setBranches)),
       );
     }
     if (wants("reports")) {
       jobs.push(
         safeGet<LocationReport[]>(
-          `/location-reports?location_id=${locationId}`,
+          `/location-reports?location_id=${requestLocationId}`,
           [],
-        ).then((response) => setLocationReports(response.data)),
+        ).then(applyResponse(setLocationReports)),
       );
       jobs.push(
         safeGet<ForwardedLocationReport[]>(
-          `/forwarded-location-reports?target_location_id=${locationId}`,
+          `/forwarded-location-reports?target_location_id=${requestLocationId}`,
           [],
-        ).then((response) => setReceivedReports(response.data)),
+        ).then(applyResponse(setReceivedReports)),
       );
       jobs.push(
         safeGet<ForwardedLocationReport[]>(
-          `/forwarded-location-reports?source_location_id=${locationId}`,
+          `/forwarded-location-reports?source_location_id=${requestLocationId}`,
           [],
-        ).then((response) => setForwardedReports(response.data)),
+        ).then(applyResponse(setForwardedReports)),
       );
       jobs.push(
-        (location?.owner_id
+        (requestOwnerId
           ? safeGet<ForwardedLocationReport[]>(
-              `/forwarded-location-reports?ministry_owner_id=${location.owner_id}`,
+              `/forwarded-location-reports?ministry_owner_id=${requestOwnerId}`,
               [],
             )
           : Promise.resolve({ data: [] as ForwardedLocationReport[] })
-        ).then((response) => setMinistryForwardedReports(response.data)),
+        ).then(applyResponse(setMinistryForwardedReports)),
       );
       jobs.push(
         safeGet<MfAttendance[]>(
-          `/mf-attendances?location_id=${locationId}${account ? `&requester_id=${account.id}` : ""}`,
+          `/mf-attendances?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
-        ).then((response) => setMfAttendances(response.data)),
+        ).then(applyResponse(setMfAttendances)),
       );
     }
     if (wants("subscriptions") || wants("base")) {
       jobs.push(
         safeGet<Record<string, string>>("/system-settings", {}).then(
-          (response) =>
+          (response) => {
+            if (!canApplyRelatedLoad()) {
+              return;
+            }
             setSubscriptionsEnforced(
               response.data.subscriptions_enforced === "true",
-            ),
+            );
+          },
         ),
       );
       jobs.push(
         safeGet<Subscription[]>("/subscriptions", []).then((response) =>
-          setSubscriptions(response.data),
+          applyResponse(setSubscriptions)(response),
         ),
       );
       jobs.push(
         safeGet<LocationSubscription[]>(
-          `/location-subscriptions?location_id=${locationId}`,
+          `/location-subscriptions?location_id=${requestLocationId}`,
           [],
         ).then((response) => {
+          if (!canApplyRelatedLoad()) {
+            return;
+          }
           setLocationSubscriptions(response.data);
           const activeAssignment = response.data[0];
           if (activeAssignment) {
@@ -2573,12 +2644,16 @@ export function LocationDetailPage() {
     return Promise.all(jobs)
       .then(() => undefined)
       .catch((requestError) => {
-        setRelatedError(
-          getApiErrorMessage(requestError, "Failed to load location records"),
-        );
+        if (canApplyRelatedLoad()) {
+          setRelatedError(
+            getApiErrorMessage(requestError, "Failed to load location records"),
+          );
+        }
       })
       .finally(() => {
-        setRelatedLoading(false);
+        if (canApplyRelatedLoad()) {
+          setRelatedLoading(false);
+        }
       });
   };
 
@@ -7805,9 +7880,7 @@ export function LocationDetailPage() {
                   selected={option.value === selectedReportMenu}
                   onClick={() => {
                     setSelectedReportMenu(option.value);
-                    if (option.value === "Local") {
-                      setReportsView("cards");
-                    } else if (option.value !== allMinistryReportsMenuOption) {
+                    if (option.value !== allMinistryReportsMenuOption) {
                       setReportsView("locations");
                     }
                     setActiveTab(10);
