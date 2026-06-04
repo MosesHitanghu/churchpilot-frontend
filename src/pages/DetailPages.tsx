@@ -89,7 +89,7 @@ import { EventCalendar } from "@mui/x-scheduler/event-calendar";
 import type { SchedulerEvent } from "@mui/x-scheduler/models";
 import { Document, Page, PDFViewer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import dayjs, { type Dayjs } from "dayjs";
-import { Children, type DragEvent as ReactDragEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
+import { Children, type DragEvent as ReactDragEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CustomDataGridToolbar } from "../components/DataGridToolbar";
 import { EmptyState } from "../components/EmptyState";
@@ -114,7 +114,8 @@ const locationTabActions = [
   "Add New",
   "Create Requisition",
 ];
-const menuBackedLocationTabs = [1, 2, 3, 10];
+const menuBackedLocationTabs = [1, 2, 3, 10, 13];
+const manageLocationContentTabs = [5, 14, 15, 16];
 
 const locationPastorRoles = ["Location Pastor", "Location Super Admin", "Location Super User"];
 const locationManagerRoles = [...locationPastorRoles, "Location Admin"];
@@ -250,7 +251,7 @@ type CollectionReportRow = {
 };
 
 type CashbookTransactionReportType = "all" | "normal" | "schedule";
-type ReportsView = "cards" | "locations" | "report" | "datagrid";
+type ReportsView = "cards" | "locations" | "report";
 
 type CashbookTransactionReportRow = {
   no: number;
@@ -1457,8 +1458,10 @@ export function LocationDetailPage() {
   const [attendanceTabMenuAnchor, setAttendanceTabMenuAnchor] = useState<null | HTMLElement>(null);
   const [financeView, setFinanceView] = useState<"cashbooks" | "requisitions">("cashbooks");
   const [financeMenuAnchor, setFinanceMenuAnchor] = useState<null | HTMLElement>(null);
-  const [membershipView, setMembershipView] = useState<"members" | "zones" | "missionalFamilies">("members");
+  const [membershipView, setMembershipView] = useState<"members" | "zones" | "missionalFamilies" | "branches">("members");
   const [membershipMenuAnchor, setMembershipMenuAnchor] = useState<null | HTMLElement>(null);
+  const locationTabsRef = useRef<HTMLDivElement | null>(null);
+  const [hiddenLocationTabCounts, setHiddenLocationTabCounts] = useState({ left: 0, right: 0 });
   const [attendanceCreateScope, setAttendanceCreateScope] = useState<"location" | "mf">("location");
   const [attendanceMenuAnchor, setAttendanceMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedAttendance, setSelectedAttendance] = useState<Attendance | null>(null);
@@ -3064,7 +3067,7 @@ export function LocationDetailPage() {
     setRemissionForm(blankRemissionForm);
     setRemissionError("");
     setEditingRemissionId(null);
-    setLocationRemissionsOpen(true);
+    setActiveTab(16);
     if (location?.id) {
       void api.get<Particular[]>(`/particulars?location_id=${location.id}`).then((response) => setLocationParticulars(response.data)).catch(() => undefined);
     }
@@ -3076,7 +3079,7 @@ export function LocationDetailPage() {
     setLocationParticularForm({ title: "", category: "", type: "General" });
     setLocationParticularError("");
     setEditingLocationParticularId(null);
-    setLocationParticularsOpen(true);
+    setActiveTab(15);
     if (location?.id) {
       void api.get<Particular[]>(`/particulars?location_id=${location.id}`).then((response) => setLocationParticulars(response.data)).catch(() => undefined);
     }
@@ -3588,10 +3591,47 @@ export function LocationDetailPage() {
     .filter((tabId) => isBranchLocation || ![3, 1, 9].includes(tabId))
     .filter((tabId) => !isOfficeLocation || tabId !== 11);
   useEffect(() => {
-    if (!visibleLocationTabs.includes(activeTab)) {
+    if (!visibleLocationTabs.includes(activeTab) && !manageLocationContentTabs.includes(activeTab)) {
       setActiveTab(visibleLocationTabs[0] ?? -1);
     }
   }, [activeTab, visibleLocationTabs]);
+  useEffect(() => {
+    const root = locationTabsRef.current;
+    const scroller = root?.querySelector<HTMLElement>(".MuiTabs-scroller");
+    if (!root || !scroller) {
+      return undefined;
+    }
+
+    const updateHiddenTabCounts = () => {
+      const scrollerRect = scroller.getBoundingClientRect();
+      const tabs = Array.from(root.querySelectorAll<HTMLElement>('[role="tab"]')).filter((tab) => !tab.hasAttribute("hidden"));
+      const nextCounts = tabs.reduce((counts, tab) => {
+        const tabRect = tab.getBoundingClientRect();
+        if (tabRect.right < scrollerRect.left - 1) {
+          counts.left += 1;
+        } else if (tabRect.left > scrollerRect.right + 1) {
+          counts.right += 1;
+        }
+        return counts;
+      }, { left: 0, right: 0 });
+      setHiddenLocationTabCounts((current) => (
+        current.left === nextCounts.left && current.right === nextCounts.right ? current : nextCounts
+      ));
+    };
+
+    updateHiddenTabCounts();
+    scroller.addEventListener("scroll", updateHiddenTabCounts, { passive: true });
+    window.addEventListener("resize", updateHiddenTabCounts);
+    const observer = new ResizeObserver(updateHiddenTabCounts);
+    observer.observe(scroller);
+    Array.from(root.querySelectorAll<HTMLElement>('[role="tab"]')).forEach((tab) => observer.observe(tab));
+
+    return () => {
+      scroller.removeEventListener("scroll", updateHiddenTabCounts);
+      window.removeEventListener("resize", updateHiddenTabCounts);
+      observer.disconnect();
+    };
+  }, [activeTab, membershipView, subscriptionsEnforced, visibleLocationTabs]);
   useEffect(() => {
     if (!isLocationManagerForUi && canApproveRequisitionsForUi) {
       setFinanceView("requisitions");
@@ -3627,11 +3667,15 @@ export function LocationDetailPage() {
     { value: "members" as const, label: `Members (${members.length})`, icon: <GroupsIcon fontSize="small" /> },
     { value: "zones" as const, label: `Zones (${zones.length})`, icon: <HubIcon fontSize="small" /> },
     { value: "missionalFamilies" as const, label: `Missional Families (${missionalFamilies.length})`, icon: <Diversity2Icon fontSize="small" /> },
+    { value: "branches" as const, label: "Branches", icon: <HomeWorkIcon fontSize="small" /> },
   ].filter((option) => (
-    isLocationManagerForUi
-    || !hasScopedLeadershipRole
-    || hasZoneScopedRole
-    || option.value === "missionalFamilies"
+    (option.value === "branches" ? visibleLocationTabs.includes(9) : true)
+    && (
+      isLocationManagerForUi
+      || !hasScopedLeadershipRole
+      || hasZoneScopedRole
+      || option.value === "missionalFamilies"
+    )
   ));
   const attendanceMenuOptions = [
     { value: 0, label: "Location", icon: <HomeWorkIcon fontSize="small" /> },
@@ -3642,13 +3686,13 @@ export function LocationDetailPage() {
     || hasZoneScopedRole
     || option.value === 1
   ));
-  const membershipActionTab = membershipView === "zones" ? 6 : membershipView === "missionalFamilies" ? 7 : 1;
+  const membershipActionTab = membershipView === "zones" ? 6 : membershipView === "missionalFamilies" ? 7 : membershipView === "branches" ? 9 : 1;
   const membershipActionLabel = locationTabActions[membershipActionTab] || "Create";
   useEffect(() => {
     if (!membershipMenuOptions.some((option) => option.value === membershipView)) {
       setMembershipView(membershipMenuOptions[0]?.value || "missionalFamilies");
     }
-  }, [hasScopedLeadershipRole, hasZoneScopedRole, isLocationManagerForUi, membershipView, members.length, missionalFamilies.length, zones.length]);
+  }, [branches.length, hasScopedLeadershipRole, hasZoneScopedRole, isLocationManagerForUi, membershipView, members.length, missionalFamilies.length, visibleLocationTabs, zones.length]);
   useEffect(() => {
     if (!attendanceMenuOptions.some((option) => option.value === attendanceSubTab)) {
       setAttendanceSubTab(attendanceMenuOptions[0]?.value ?? 1);
@@ -4441,27 +4485,6 @@ export function LocationDetailPage() {
       }, {}),
       status: card.status || "Pending",
     }));
-  const reportDataGridRows = filteredReportCards.map((card, index) => ({
-    id: card.forwardedReport?.id || `${card.scheduleDate}-${card.sourceTitle || location.title || "location"}-${index}`,
-    no: index + 1,
-    location: card.sourceTitle || location.title || "Location",
-    scheduleDate: card.scheduleDate,
-    scheduleTypes: card.scheduleTypes.join(", ") || "Not set",
-    attendance: card.attendanceTotal,
-    collections: card.particularsTotal,
-    remissions: card.remissionsTotal,
-    status: card.status || "Local",
-  }));
-  const reportDataGridColumns: GridColDef<(typeof reportDataGridRows)[number]>[] = [
-    { field: "no", headerName: "No", width: 72 },
-    { field: "location", headerName: "Location", minWidth: 180, flex: 1 },
-    { field: "scheduleDate", headerName: "Schedule Date", minWidth: 140, flex: 0.8 },
-    { field: "scheduleTypes", headerName: "Schedule Types", minWidth: 200, flex: 1.2 },
-    { field: "attendance", headerName: "Attendance", type: "number", minWidth: 130, flex: 0.7 },
-    { field: "collections", headerName: "Collections", type: "number", minWidth: 130, flex: 0.7 },
-    { field: "remissions", headerName: "Remissions", type: "number", minWidth: 130, flex: 0.7 },
-    { field: "status", headerName: "Status", minWidth: 120, flex: 0.6 },
-  ];
   const activeReportsTitle = selectedReportMenu === "Local"
     ? `${location.title || "Location"} Reports`
     : selectedReportMenu === allMinistryReportsMenuOption
@@ -4811,105 +4834,86 @@ export function LocationDetailPage() {
   );
   return (
     <>
-      <PageHeader
-        title={location.title || "Location"}
-        titleSubtitle={activeLocationRole || "No active role"}
-        icon={<HomeWorkIcon />}
-        action={
-            <>
-              <VerifiedIcon color={location.status === "Active" ? "secondary" : "disabled"} fontSize="small" />
-              <IconButton
-                aria-label="Location role options"
-                onClick={(event) => setRoleMenuAnchor(event.currentTarget)}
-                disabled={activeRoleSaving}
-              >
-                <MoreVertIcon />
-              </IconButton>
-              <Menu
-                anchorEl={roleMenuAnchor}
-                open={Boolean(roleMenuAnchor)}
-                onClose={() => {
-                  setRoleMenuAnchor(null);
-                  setRoleSwitchMenuAnchor(null);
-                }}
-                slotProps={{ list: { role: "menubar", "aria-label": "Location menu" } }}
-              >
-                <MenuItem onClick={() => {
-                  setRoleMenuAnchor(null);
-                  setRoleSwitchMenuAnchor(null);
-                  setLocationDetailsOpen(true);
-                }}>
-                  <ListItemIcon><ArticleIcon fontSize="small" /></ListItemIcon>
-                  View Details
-                </MenuItem>
-                {canEditLocation ? (
-                  <MenuItem onClick={openLocationEdit}>
-                    <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-                    Edit
-                  </MenuItem>
-                ) : null}
-                {canEditLocation && location.is_hq ? (
-                  <MenuItem onClick={() => void updateLocationHq(false)} disabled={activeRoleSaving}>
-                    <ListItemIcon><HomeWorkIcon fontSize="small" /></ListItemIcon>
-                    Revert HQ
-                  </MenuItem>
-                ) : canEditLocation && !ministryHasOtherHq ? (
-                  <MenuItem onClick={() => void updateLocationHq(true)} disabled={activeRoleSaving}>
-                    <ListItemIcon><HomeWorkIcon fontSize="small" /></ListItemIcon>
-                    Set as HQ
-                  </MenuItem>
-                ) : null}
-                <MenuItem onClick={openLocationParticulars}>
-                  <ListItemIcon><CollectionsBookmarkIcon fontSize="small" /></ListItemIcon>
-                  Particulars
-                </MenuItem>
-                <MenuItem onClick={openLocationRemissions}>
-                  <ListItemIcon><PaidIcon fontSize="small" /></ListItemIcon>
-                  Remissions
-                </MenuItem>
-                {isLocationOwner ? (
-                  <MenuItem
-                    aria-haspopup="menu"
-                    aria-controls={roleSwitchMenuAnchor ? "location-role-submenu" : undefined}
-                    onClick={(event) => setRoleSwitchMenuAnchor(event.currentTarget)}
-                  >
-                    <ListItemIcon><AdminPanelSettingsIcon fontSize="small" /></ListItemIcon>
-                    Roles
-                  </MenuItem>
-                ) : null}
-                {canDeleteLocation ? (
-                  <MenuItem onClick={deleteLocation}>
-                    <ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>
-                    Delete
-                  </MenuItem>
-                ) : null}
-              </Menu>
-              <Menu
-                id="location-role-submenu"
-                anchorEl={roleSwitchMenuAnchor}
-                open={Boolean(roleSwitchMenuAnchor)}
-                onClose={() => setRoleSwitchMenuAnchor(null)}
-                anchorOrigin={{ vertical: "top", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "left" }}
-                slotProps={{ list: { role: "menu", "aria-label": "Switch active role" } }}
-              >
-                {["Location Admin", "Viewer"].map((role) => (
-                  <MenuItem
-                    key={role}
-                    onClick={() => handleSelectActiveRole(role)}
-                  >
-                    <CheckIcon
-                      fontSize="small"
-                      color={activeLocationRole === role ? "secondary" : "disabled"}
-                      sx={{ mr: 1, visibility: activeLocationRole === role ? "visible" : "hidden" }}
-                    />
-                    {role}
-                  </MenuItem>
-                ))}
-              </Menu>
-            </>
-        }
-      />
+      <Menu
+        anchorEl={roleMenuAnchor}
+        open={Boolean(roleMenuAnchor)}
+        onClose={() => {
+          setRoleMenuAnchor(null);
+          setRoleSwitchMenuAnchor(null);
+        }}
+        slotProps={{ list: { role: "menubar", "aria-labelledby": "location-tab-13" } }}
+      >
+        <MenuItem onClick={() => {
+          setRoleMenuAnchor(null);
+          setRoleSwitchMenuAnchor(null);
+          setActiveTab(14);
+        }}>
+          <ListItemIcon><ArticleIcon fontSize="small" /></ListItemIcon>
+          About
+        </MenuItem>
+        {canEditLocation && location.is_hq ? (
+          <MenuItem onClick={() => void updateLocationHq(false)} disabled={activeRoleSaving}>
+            <ListItemIcon><HomeWorkIcon fontSize="small" /></ListItemIcon>
+            Revert HQ
+          </MenuItem>
+        ) : canEditLocation && !ministryHasOtherHq ? (
+          <MenuItem onClick={() => void updateLocationHq(true)} disabled={activeRoleSaving}>
+            <ListItemIcon><HomeWorkIcon fontSize="small" /></ListItemIcon>
+            Set as HQ
+          </MenuItem>
+        ) : null}
+        <MenuItem onClick={openLocationParticulars}>
+          <ListItemIcon><CollectionsBookmarkIcon fontSize="small" /></ListItemIcon>
+          Particulars
+        </MenuItem>
+        <MenuItem onClick={openLocationRemissions}>
+          <ListItemIcon><PaidIcon fontSize="small" /></ListItemIcon>
+          Remissions
+        </MenuItem>
+        {visibleLocationTabs.includes(5) ? (
+          <MenuItem onClick={() => {
+            setActiveTab(5);
+            setRoleMenuAnchor(null);
+            setRoleSwitchMenuAnchor(null);
+          }}>
+            <ListItemIcon><AdminPanelSettingsIcon fontSize="small" /></ListItemIcon>
+            Roles
+          </MenuItem>
+        ) : null}
+        {isLocationOwner ? (
+          <MenuItem
+            aria-haspopup="menu"
+            aria-controls={roleSwitchMenuAnchor ? "location-role-submenu" : undefined}
+            onClick={(event) => setRoleSwitchMenuAnchor(event.currentTarget)}
+          >
+            <ListItemIcon><AdminPanelSettingsIcon fontSize="small" /></ListItemIcon>
+            Switch Role
+          </MenuItem>
+        ) : null}
+      </Menu>
+      <Menu
+        id="location-role-submenu"
+        anchorEl={roleSwitchMenuAnchor}
+        open={Boolean(roleSwitchMenuAnchor)}
+        onClose={() => setRoleSwitchMenuAnchor(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        slotProps={{ list: { role: "menu", "aria-label": "Switch active role" } }}
+      >
+        {["Location Admin", "Viewer"].map((role) => (
+          <MenuItem
+            key={role}
+            onClick={() => handleSelectActiveRole(role)}
+          >
+            <CheckIcon
+              fontSize="small"
+              color={activeLocationRole === role ? "secondary" : "disabled"}
+              sx={{ mr: 1, visibility: activeLocationRole === role ? "visible" : "hidden" }}
+            />
+            {role}
+          </MenuItem>
+        ))}
+      </Menu>
       <Stack direction="row" sx={{ display: { xs: "flex", md: "none" }, justifyContent: "flex-end", mb: 2 }}>
         <Tooltip title="Switch Location">
           <IconButton
@@ -4930,8 +4934,10 @@ export function LocationDetailPage() {
         </Grid>
         <Grid size={{ xs: 12, md: 9 }} sx={{ display: "flex" }}>
           <Paper variant="outlined" sx={{ overflow: "hidden", width: "100%" }}>
+            <Box sx={{ position: "relative" }}>
             <Tabs
-              value={activeTab === -1 ? false : activeTab}
+              ref={locationTabsRef}
+              value={activeTab === -1 ? false : manageLocationContentTabs.includes(activeTab) ? 13 : activeTab === 9 ? 1 : activeTab}
               onChange={(_, nextTab: number) => {
                 if (!menuBackedLocationTabs.includes(nextTab)) {
                   setActiveTab(nextTab);
@@ -4940,7 +4946,17 @@ export function LocationDetailPage() {
               variant="scrollable"
               scrollButtons="auto"
               allowScrollButtonsMobile
-              sx={{ borderBottom: 1, borderColor: "divider", px: 1 }}
+              sx={{
+                borderBottom: 1,
+                borderColor: "divider",
+                px: 1,
+                "& .MuiTab-root > svg": {
+                  display: { xs: "none", sm: "inline-flex" },
+                },
+                "& .MuiTab-icon, & .MuiTab-iconWrapper": {
+                  display: { xs: "none", sm: "inline-flex" },
+                },
+              }}
             >
               {visibleLocationTabs.includes(10) ? (
                 <Tab
@@ -5031,12 +5047,68 @@ export function LocationDetailPage() {
                   )}
                 />
               ) : null}
-              {visibleLocationTabs.includes(9) ? <Tab value={9} id="location-tab-9" aria-controls="location-tabpanel-9" icon={<HomeWorkIcon />} iconPosition="start" label={`Branches (${branches.length})`} /> : null}
-              {visibleLocationTabs.includes(5) ? <Tab value={5} id="location-tab-5" aria-controls="location-tabpanel-5" icon={<AdminPanelSettingsIcon />} iconPosition="start" label="Roles" /> : null}
               {visibleLocationTabs.includes(0) ? <Tab value={0} id="location-tab-0" aria-controls="location-tabpanel-0" icon={<RateReviewIcon />} iconPosition="start" label="Posts" /> : null}
               {visibleLocationTabs.includes(4) ? <Tab value={4} id="location-tab-4" aria-controls="location-tabpanel-4" icon={<CalendarMonthIcon />} iconPosition="start" label="Events" /> : null}
               {visibleLocationTabs.includes(12) ? <Tab value={12} id="location-tab-12" aria-controls="location-tabpanel-12" icon={<PaidIcon />} iconPosition="start" label="Subscriptions" /> : null}
+              <Tab
+                value={13}
+                id="location-tab-13"
+                icon={<SettingsIcon />}
+                iconPosition="start"
+                label={(
+                  <Box
+                    component="span"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setRoleMenuAnchor(event.currentTarget);
+                    }}
+                    sx={{ display: "inline-flex", alignItems: "center", gap: 0.4 }}
+                  >
+                    Manage
+                    <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                )}
+                onClick={(event) => setRoleMenuAnchor(event.currentTarget)}
+                disabled={activeRoleSaving}
+              />
             </Tabs>
+            {hiddenLocationTabCounts.left > 0 ? (
+              <Chip
+                size="small"
+                color="secondary"
+                label={`+${hiddenLocationTabCounts.left}`}
+                sx={{
+                  position: "absolute",
+                  left: 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 2,
+                  height: 22,
+                  fontWeight: 900,
+                  pointerEvents: "none",
+                  boxShadow: 1,
+                }}
+              />
+            ) : null}
+            {hiddenLocationTabCounts.right > 0 ? (
+              <Chip
+                size="small"
+                color="secondary"
+                label={`+${hiddenLocationTabCounts.right}`}
+                sx={{
+                  position: "absolute",
+                  right: 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 2,
+                  height: 22,
+                  fontWeight: 900,
+                  pointerEvents: "none",
+                  boxShadow: 1,
+                }}
+              />
+            ) : null}
+            </Box>
             <Menu
               id="reports-tab-menu"
               anchorEl={reportMenuAnchor}
@@ -5136,7 +5208,7 @@ export function LocationDetailPage() {
                   key={option.value}
                   onClick={() => {
                     setMembershipView(option.value);
-                    setActiveTab(1);
+                    setActiveTab(option.value === "branches" ? 9 : 1);
                     setMembershipMenuAnchor(null);
                   }}
                 >
@@ -5145,7 +5217,7 @@ export function LocationDetailPage() {
                 </MenuItem>
               ))}
             </Menu>
-            <Box sx={{ p: { xs: 2, sm: 3 }, position: "relative" }}>
+            <Box sx={{ p: { xs: 2, sm: 3 }, position: "relative", minHeight: { xs: 360, sm: 420 } }}>
               <Stack direction="row" sx={{ justifyContent: "flex-end", mb: 2 }}>
                 {canCreateForActiveTab && activeTab !== 1 && activeTab !== 2 && activeTab !== 3 && activeTab !== 10 && activeTab !== 11 ? (
                   <CircularAddButton label={locationTabActions[activeTab]} onClick={() => openActionDrawer(activeTab)} />
@@ -5159,8 +5231,7 @@ export function LocationDetailPage() {
                     inset: 0,
                     zIndex: 5,
                     display: "grid",
-                    placeItems: "start center",
-                    pt: 4,
+                    placeItems: "center",
                     pointerEvents: "none",
                     bgcolor: "rgba(255, 255, 255, 0.45)",
                   }}
@@ -5551,6 +5622,171 @@ export function LocationDetailPage() {
                   </Grid>
                 )}
               </TabPanel>
+              <TabPanel value={activeTab} index={14}>
+                <Stack spacing={2.5}>
+                  <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                    <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+                      <Typography variant="h6" sx={{ fontWeight: 900 }}>About</Typography>
+                    </Box>
+                    <List dense disablePadding>
+                      {[
+                        { label: "Type", value: location.type || "Not set" },
+                        { label: "Status", value: location.status || "Active" },
+                        { label: "Active Role", value: activeLocationRole || "No active role" },
+                        { label: "Email", value: location.email || "Not set" },
+                        { label: "Phone", value: location.phone_number || "Not set" },
+                        { label: "Address", value: [location.address, location.city, location.district, location.country].filter(Boolean).join(", ") || "Not set" },
+                        { label: "Reporting Start Date", value: location.reporting_start_date || "Not set" },
+                        { label: "Parent Location", value: location.parent_location_id ? `Location #${location.parent_location_id}` : "Main account location" },
+                      ].map((item) => (
+                        <ListItem key={item.label} divider>
+                          <ListItemText primary={item.label} secondary={item.value} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                  {location.description ? (
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 0.75 }}>Description</Typography>
+                      <Typography variant="body2" color="text.secondary">{location.description}</Typography>
+                    </Paper>
+                  ) : null}
+                  {(canEditLocation || canDeleteLocation) ? (
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                      {canEditLocation ? (
+                        <Button variant="contained" startIcon={<EditIcon />} onClick={openLocationEdit}>
+                          Edit Location
+                        </Button>
+                      ) : null}
+                      {canDeleteLocation ? (
+                        <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={deleteLocation}>
+                          Delete Location
+                        </Button>
+                      ) : null}
+                    </Stack>
+                  ) : null}
+                </Stack>
+              </TabPanel>
+              <TabPanel value={activeTab} index={15}>
+                <Stack spacing={2}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>Particulars</Typography>
+                    {locationParticularError ? <Alert severity="error" sx={{ mb: 2 }}>{locationParticularError}</Alert> : null}
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" }, gap: 1.5, alignItems: "center" }}>
+                      <TextField size="small" label="Particular" value={locationParticularForm.title} onChange={(event) => setLocationParticularForm((current) => ({ ...current, title: event.target.value }))} fullWidth />
+                      <TextField size="small" select label="Category" value={locationParticularForm.category} onChange={(event) => setLocationParticularForm((current) => ({ ...current, category: event.target.value }))} fullWidth>
+                        {["Income", "Expense"].map((category) => (
+                          <MenuItem key={category} value={category}>{category}</MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField size="small" select label="Type" value={locationParticularForm.type} onChange={(event) => setLocationParticularForm((current) => ({ ...current, type: event.target.value }))} fullWidth>
+                        {particularTypes.map((type) => (
+                          <MenuItem key={type} value={type}>{type}</MenuItem>
+                        ))}
+                      </TextField>
+                      <Button variant="contained" startIcon={editingLocationParticularId ? <SaveIcon /> : <AddIcon />} onClick={saveLocationParticular} disabled={!locationParticularForm.title.trim() || !locationParticularForm.category || !locationParticularForm.type} fullWidth>
+                        {editingLocationParticularId ? "Update" : "Add"}
+                      </Button>
+                    </Box>
+                    {editingLocationParticularId ? <Button size="small" onClick={resetLocationParticularForm} sx={{ mt: 1.5 }}>Cancel Edit</Button> : null}
+                  </Paper>
+                  <TextField
+                    size="small"
+                    label="Search particulars"
+                    value={locationParticularSearch}
+                    onChange={(event) => setLocationParticularSearch(event.target.value)}
+                    fullWidth
+                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+                  />
+                  <List dense disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
+                    {filteredLocationParticulars.map((particular) => (
+                      <ListItem
+                        key={particular.particular_id}
+                        divider
+                        secondaryAction={(
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton edge="end" size="small" aria-label={`Edit ${particular.title || "particular"}`} onClick={() => editLocationParticular(particular)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton edge="end" size="small" color="error" aria-label={`Remove ${particular.title || "particular"}`} onClick={() => removeLocationParticular(particular)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        )}
+                        sx={{ py: 1 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 38 }}>
+                          <CollectionsBookmarkIcon color="secondary" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={particular.title || `Particular #${particular.particular_id}`}
+                          secondary={[particular.category || "No category", particular.type || "General"].join(" - ")}
+                          sx={{ pr: 8 }}
+                          slotProps={{ primary: { sx: { fontWeight: 800 } }, secondary: { noWrap: true } }}
+                        />
+                      </ListItem>
+                    ))}
+                    {!filteredLocationParticulars.length ? <ListItem disableGutters><ListItemText primary="No particulars found" /></ListItem> : null}
+                  </List>
+                </Stack>
+              </TabPanel>
+              <TabPanel value={activeTab} index={16}>
+                <Stack spacing={2}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>Remissions</Typography>
+                    {remissionError ? <Alert severity="error" sx={{ mb: 2 }}>{remissionError}</Alert> : null}
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" }, gap: 1.5, alignItems: "center" }}>
+                      <Autocomplete
+                        options={incomeLocationParticulars}
+                        value={incomeLocationParticulars.find((particular) => idsEqual(particular.particular_id, remissionForm.particular_id)) || null}
+                        onChange={(_, value) => updateRemissionForm({ particular_id: value?.particular_id || "" })}
+                        getOptionLabel={(particular) => particular.title || `Particular #${particular.particular_id}`}
+                        isOptionEqualToValue={(option, value) => idsEqual(option.particular_id, value.particular_id)}
+                        renderInput={(params) => <TextField {...params} label="Particular" size="small" required fullWidth />}
+                        fullWidth
+                      />
+                      <TextField label="Title" size="small" value={remissionForm.title} onChange={(event) => updateRemissionForm({ title: event.target.value })} fullWidth required />
+                      <TextField label="Percentage" size="small" type="number" value={remissionForm.percentage} onChange={(event) => updateRemissionForm({ percentage: event.target.value })} fullWidth required />
+                      <Button variant="contained" startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />} onClick={handleSaveLocationRemission} disabled={remissionSaving || !remissionForm.title.trim() || !remissionForm.percentage || !remissionForm.particular_id} fullWidth>
+                        {remissionSaving ? "Saving..." : editingRemissionId ? "Update" : "Add"}
+                      </Button>
+                    </Box>
+                    <TextField label="Description" size="small" value={remissionForm.description} onChange={(event) => updateRemissionForm({ description: event.target.value })} multiline minRows={2} fullWidth sx={{ mt: 1.5 }} />
+                    {editingRemissionId ? <Button size="small" onClick={resetRemissionForm} disabled={remissionSaving} sx={{ mt: 1.5 }}>Cancel Edit</Button> : null}
+                  </Paper>
+                  {locationRemissions.length === 0 ? (
+                    <EmptyState title="No remissions for this location yet" message="Create remissions to see them here." />
+                  ) : (
+                    <List dense sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}>
+                      {locationRemissions.map((remission) => (
+                        <ListItem
+                          key={remission.id}
+                          divider
+                          secondaryAction={(
+                            <Stack direction="row" spacing={0.5}>
+                              <IconButton edge="end" size="small" aria-label={`Edit ${remission.title || "remission"}`} onClick={() => handleEditLocationRemission(remission)} disabled={remissionSaving}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton edge="end" size="small" aria-label={`Remove ${remission.title || "remission"}`} onClick={() => handleDeleteLocationRemission(remission)} disabled={remissionSaving} color="error">
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
+                          )}
+                        >
+                          <ListItemText
+                            primary={`${remission.title || `Remission #${remission.id}`} (${Number(remission.percentage || 0)}%)`}
+                            secondary={[
+                              incomeLocationParticulars.find((particular) => idsEqual(particular.particular_id, remission.particular_id))?.title || "No particular selected",
+                              remission.description || "No description",
+                            ].join(" - ")}
+                            sx={{ pr: 8 }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Stack>
+              </TabPanel>
               <TabPanel value={activeTab} index={6}>
                 {zones.length === 0 ? (
                   <EmptyState title="No zones for this location yet" message="Create a zone to see it here." />
@@ -5768,7 +6004,6 @@ export function LocationDetailPage() {
                       ["cards", "Reports Cards"],
                       ["locations", "Location Cards"],
                       ["report", "Report View"],
-                      ["datagrid", "Datagrid View"],
                     ].map(([value, label]) => (
                       <MenuItem key={value} selected={reportsView === value} onClick={() => { setReportsView(value as ReportsView); setReportsViewAnchor(null); }}>
                         {label}
@@ -5921,11 +6156,6 @@ export function LocationDetailPage() {
                       </Box>
                     )
                   ) : null}
-                      {activeReportsView === "datagrid" ? (
-                        <Paper variant="outlined" sx={{ height: 560, width: "100%" }}>
-                          <DataGrid rows={reportDataGridRows} columns={reportDataGridColumns} pageSizeOptions={[10, 25, 50, 100]} slots={{ toolbar: CustomDataGridToolbar }} showToolbar disableRowSelectionOnClick sx={{ border: 0 }} />
-                        </Paper>
-                      ) : null}
                     </>
                   ) : (
                     <EmptyState title="Select a reports menu" message="Choose Local, Received, or All Ministry Reports from the Reports dropdown." />
@@ -7431,6 +7661,7 @@ export function LocationDetailPage() {
           <Button onClick={() => setLocationRemissionsOpen(false)} disabled={remissionSaving}>Close</Button>
           <Button
             variant="contained"
+            startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />}
             onClick={handleSaveLocationRemission}
             disabled={remissionSaving || !remissionForm.title.trim() || !remissionForm.percentage || !remissionForm.particular_id}
           >
@@ -9555,7 +9786,7 @@ export function CashbookDetailPage() {
           {transactionSuccess ? <Alert severity="success" sx={{ mb: 2 }}>{transactionSuccess}</Alert> : null}
           <LocalizationProvider dateAdapter={AdapterDayjs}>
           <Tabs value={transactionTab} onChange={(_, value: string) => setTransactionTab(value)} sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
-            <Tab value="normal" label="General Transactions" />
+            <Tab value="normal" label="General" />
             <Tab value="schedule" label="Schedule Collections" />
           </Tabs>
           {transactionTab === "normal" ? (

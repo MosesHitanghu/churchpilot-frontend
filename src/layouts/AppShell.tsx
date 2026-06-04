@@ -41,7 +41,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
 import { SiteFooter } from "../components/SiteFooter";
-import { api, type Account } from "../lib/api";
+import { api, type Account, type Location } from "../lib/api";
 import { clearSessionAccount, setSessionAccount } from "../lib/session";
 import type { AppThemeMode } from "../theme";
 
@@ -61,7 +61,7 @@ type AppShellProps = {
 
 const navItems = [
   { label: "Home", path: "/app", icon: <HomeIcon />, menu: "home" },
-  { label: "Financial", path: "/app/financial", icon: <PaidIcon />, menu: "financial" },
+  { label: "Finances", path: "/app/financial", icon: <PaidIcon />, menu: "financial" },
   { label: "Support Center", path: "/app/support", icon: <HelpCenterIcon />, menu: "support" },
   { label: "Roles", path: "/app/roles", icon: <ManageAccountsIcon />, menu: "admins" },
 ];
@@ -76,6 +76,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<null | HTMLElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [lastLocationPath, setLastLocationPath] = useState("");
+  const [locationPageTitle, setLocationPageTitle] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
   const rememberedLocationKey = `church-admin:last-location:${account.id}`;
@@ -86,7 +87,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       return "CashBook";
     }
     if (/^\/app\/locations\/[^/]+$/.test(location.pathname)) {
-      return "Location";
+      return locationPageTitle || "Location";
     }
     const activeItem = visibleNavItems.find((item) => item.path === location.pathname);
     return activeItem?.label || "Home";
@@ -101,6 +102,32 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       setOpen(false);
     }
   }, [location.pathname, rememberedLocationKey]);
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/app\/locations\/([^/]+)$/);
+    if (!match) {
+      setLocationPageTitle("");
+      return undefined;
+    }
+
+    let active = true;
+    setLocationPageTitle("");
+    api.get<Location>(`/locations/${match[1]}`)
+      .then((response) => {
+        if (active) {
+          setLocationPageTitle(response.data.title || `Location #${response.data.id}`);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLocationPageTitle("Location");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     const rememberedLocationId = sessionStorage.getItem(rememberedLocationKey);
@@ -244,7 +271,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
             </IconButton>
           </Tooltip>
           <Typography variant="h6" sx={{ flexGrow: 1, ml: 2, fontWeight: 900, display: "block", minWidth: 0 }} noWrap>
-            {isMobile ? "ChurchPilot" : currentPageTitle}
+            {currentPageTitle}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 } }}>
             <Box
