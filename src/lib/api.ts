@@ -429,6 +429,7 @@ export type Schedule = {
   time?: string | null;
   end_time?: string | null;
   all_day?: boolean | null;
+  report_status?: string | null;
   location_id?: string | null;
   created_at?: string | null;
 };

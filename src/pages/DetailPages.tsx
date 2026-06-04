@@ -1171,6 +1171,14 @@ function formatScheduleTime(value?: string | null) {
   return value ? dayjs(`2000-01-01T${value}`).format("hh:mm A") : "";
 }
 
+function formatDisplayDate(value?: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format("D MMMM YYYY") : value;
+}
+
 function useResource<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
@@ -1181,6 +1189,7 @@ function useResource<T>(url: string | null) {
       setError("");
       return;
     }
+    setData(null);
     setError("");
     api
       .get<T>(url)
@@ -1437,6 +1446,10 @@ function scheduleWhenText(schedule: Schedule) {
 
 function scheduleOptionLabel(schedule: Schedule) {
   return schedule.title || `Schedule #${schedule.id}`;
+}
+
+function scheduleNameTypeLabel(schedule: Schedule) {
+  return [schedule.title, schedule.type].filter(Boolean).join(" - ");
 }
 
 function uniqueScheduleTypes(schedules: Schedule[]) {
@@ -2238,13 +2251,18 @@ export function LocationDetailPage() {
     useState<null | HTMLElement>(null);
   const [activeRoleSaving, setActiveRoleSaving] = useState(false);
   const [locationEditOpen, setLocationEditOpen] = useState(false);
+  const [locationEditSaving, setLocationEditSaving] = useState(false);
+  const [locationEditError, setLocationEditError] = useState("");
+  const [locationDeleteOpen, setLocationDeleteOpen] = useState(false);
+  const [locationDeleteSaving, setLocationDeleteSaving] = useState(false);
+  const [locationDeleteError, setLocationDeleteError] = useState("");
   const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   const [locationParticularsOpen, setLocationParticularsOpen] = useState(false);
   const [locationParticularSearch, setLocationParticularSearch] = useState("");
   const [locationParticularForm, setLocationParticularForm] = useState({
     title: "",
     category: "",
-    type: "General",
+    type: "",
   });
   const [locationParticularError, setLocationParticularError] = useState("");
   const [editingLocationParticularId, setEditingLocationParticularId] =
@@ -2349,7 +2367,7 @@ export function LocationDetailPage() {
     : "";
 
   const loadRelatedRecords = (groups: string[] = ["all"]) => {
-    if (!locationId) {
+    if (!locationId || !location) {
       return Promise.resolve();
     }
     const safeGet = <T,>(url: string, fallback: T) =>
@@ -2813,6 +2831,13 @@ export function LocationDetailPage() {
     if (!requisitionForm.date || !items.length) {
       setRequisitionError(
         "Select a date and add at least one requisition item with an amount.",
+      );
+      return;
+    }
+    const uniqueParticularIds = new Set(items.map((item) => item.particular_id));
+    if (uniqueParticularIds.size !== items.length) {
+      setRequisitionError(
+        "Each requisition item must use a different particular.",
       );
       return;
     }
@@ -4279,7 +4304,7 @@ export function LocationDetailPage() {
   const openLocationParticulars = () => {
     setRoleMenuAnchor(null);
     setRoleSwitchMenuAnchor(null);
-    setLocationParticularForm({ title: "", category: "", type: "General" });
+    setLocationParticularForm({ title: "", category: "", type: "" });
     setLocationParticularError("");
     setEditingLocationParticularId(null);
     setActiveTab(15);
@@ -4291,8 +4316,20 @@ export function LocationDetailPage() {
     }
   };
 
+  const openLocationParticularDrawer = () => {
+    resetLocationParticularForm();
+    setLocationParticularError("");
+    setLocationParticularsOpen(true);
+  };
+
+  const openLocationRemissionDrawer = () => {
+    resetRemissionForm();
+    setRemissionError("");
+    setLocationRemissionsOpen(true);
+  };
+
   const resetLocationParticularForm = () => {
-    setLocationParticularForm({ title: "", category: "", type: "General" });
+    setLocationParticularForm({ title: "", category: "", type: "" });
     setEditingLocationParticularId(null);
     setLocationParticularError("");
   };
@@ -4328,13 +4365,17 @@ export function LocationDetailPage() {
       }
       resetLocationParticularForm();
       await loadRelatedRecords();
+      setFeedback({
+        severity: "success",
+        message: `Particular ${editingLocationParticularId ? "updated" : "saved"} successfully.`,
+      });
     } catch (requestError) {
-      setLocationParticularError(
-        getApiErrorMessage(
-          requestError,
-          `Failed to ${editingLocationParticularId ? "update" : "add"} particular`,
-        ),
+      const message = getApiErrorMessage(
+        requestError,
+        `Failed to ${editingLocationParticularId ? "update" : "add"} particular`,
       );
+      setLocationParticularError(message);
+      setFeedback({ severity: "error", message });
     }
   };
 
@@ -4346,6 +4387,7 @@ export function LocationDetailPage() {
       type: particular.type || "General",
     });
     setLocationParticularError("");
+    setLocationParticularsOpen(true);
   };
 
   const removeLocationParticular = async (particular: Particular) => {
@@ -4387,6 +4429,7 @@ export function LocationDetailPage() {
       description: remission.description || "",
     });
     setRemissionError("");
+    setLocationRemissionsOpen(true);
   };
 
   const handleSaveLocationRemission = async () => {
@@ -4417,13 +4460,17 @@ export function LocationDetailPage() {
       }
       resetRemissionForm();
       await loadRelatedRecords();
+      setFeedback({
+        severity: "success",
+        message: `Remission ${editingRemissionId ? "updated" : "saved"} successfully.`,
+      });
     } catch (requestError) {
-      setRemissionError(
-        getApiErrorMessage(
-          requestError,
-          `Failed to ${editingRemissionId ? "update" : "create"} remission`,
-        ),
+      const message = getApiErrorMessage(
+        requestError,
+        `Failed to ${editingRemissionId ? "update" : "create"} remission`,
       );
+      setRemissionError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setRemissionSaving(false);
     }
@@ -4465,7 +4512,6 @@ export function LocationDetailPage() {
     try {
       const targetTab = actionTab;
       const requesterPayload = { requester_id: account.id };
-      let createdCashbookId = "";
       if (targetTab === 0) {
         await api.post("/posts", {
           ...requesterPayload,
@@ -4483,7 +4529,7 @@ export function LocationDetailPage() {
           audience: actionForm.audience,
         });
       } else if (targetTab === 2) {
-        const response = await api.post<Cashbook>("/cashbooks", {
+        await api.post<Cashbook>("/cashbooks", {
           ...requesterPayload,
           location_id: location.id,
           title: actionForm.title,
@@ -4500,7 +4546,6 @@ export function LocationDetailPage() {
               ? actionForm.opening_balance_cashbook_id || null
               : null,
         });
-        createdCashbookId = response.data.cashbook_id;
       } else if (targetTab === 3) {
         if (attendanceCreateScope === "mf") {
           if (!actionForm.sg_id) {
@@ -4699,13 +4744,6 @@ export function LocationDetailPage() {
         severity: "success",
         message: `${locationTabActions[targetTab] || "Record"} saved successfully.`,
       });
-      if (createdCashbookId) {
-        navigate(`/app/cashbooks/${createdCashbookId}`, {
-          state: {
-            cashbookReturnTo: `${routerLocation.pathname}${routerLocation.search}`,
-          },
-        });
-      }
     } catch (requestError) {
       const message = getApiErrorMessage(requestError, "Failed to save record");
       setActionError(message);
@@ -4812,6 +4850,7 @@ export function LocationDetailPage() {
       address: location.address || "",
       reporting_start_date: location.reporting_start_date || "",
     });
+    setLocationEditError("");
     setRoleMenuAnchor(null);
     setRoleSwitchMenuAnchor(null);
     setLocationEditOpen(true);
@@ -4821,21 +4860,54 @@ export function LocationDetailPage() {
     if (!location || !account) {
       return;
     }
-    const response = await api.patch<Location>(`/locations/${location.id}`, {
-      requester_id: account.id,
-      ...locationEditForm,
-    });
-    setLocation(response.data);
-    await refreshOverview();
-    setLocationEditOpen(false);
+    setLocationEditSaving(true);
+    setLocationEditError("");
+    try {
+      const response = await api.patch<Location>(`/locations/${location.id}`, {
+        requester_id: account.id,
+        ...locationEditForm,
+      });
+      setLocation(response.data);
+      await refreshOverview();
+      setFeedback({
+        severity: "success",
+        message: "Location saved successfully.",
+      });
+    } catch (requestError) {
+      const message = getApiErrorMessage(
+        requestError,
+        "Failed to save location",
+      );
+      setLocationEditError(message);
+      setFeedback({ severity: "error", message });
+    } finally {
+      setLocationEditSaving(false);
+    }
   };
 
   const deleteLocation = async () => {
     if (!location || !account) {
       return;
     }
-    await api.delete(`/locations/${location.id}?requester_id=${account.id}`);
-    navigate("/app");
+    setLocationDeleteSaving(true);
+    setLocationDeleteError("");
+    try {
+      await api.delete(`/locations/${location.id}?requester_id=${account.id}`);
+      setFeedback({
+        severity: "success",
+        message: "Location deleted successfully.",
+      });
+      navigate("/app");
+    } catch (requestError) {
+      const message = getApiErrorMessage(
+        requestError,
+        "Failed to delete location",
+      );
+      setLocationDeleteError(message);
+      setFeedback({ severity: "error", message });
+    } finally {
+      setLocationDeleteSaving(false);
+    }
   };
 
   const openScheduleEdit = (schedule: Schedule) => {
@@ -5256,7 +5328,6 @@ export function LocationDetailPage() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Diversity2Icon color="secondary" sx={{ mt: 0.5 }} />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="overline" color="text.secondary">
                       Zone
@@ -5300,9 +5371,6 @@ export function LocationDetailPage() {
                       divider
                       sx={{ py: 0.75, gap: 1 }}
                     >
-                      <ListItemIcon sx={{ minWidth: 30 }}>
-                        <CheckCircleIcon color="secondary" fontSize="small" />
-                      </ListItemIcon>
                       <ListItemText
                         primary={item.label}
                         slotProps={{
@@ -5707,7 +5775,12 @@ export function LocationDetailPage() {
                 })
               }
               slotProps={{
-                textField: { size: "small", fullWidth: true, required: true },
+                textField: {
+                  size: "small",
+                  fullWidth: true,
+                  required:
+                    (locationForm.type || "").toLowerCase() !== "office",
+                },
               }}
             />
           </LocalizationProvider>
@@ -5724,7 +5797,11 @@ export function LocationDetailPage() {
             <Button
               type="submit"
               variant="contained"
-              disabled={savingLocation || !locationForm.reporting_start_date}
+              disabled={
+                savingLocation ||
+                ((locationForm.type || "").toLowerCase() !== "office" &&
+                  !locationForm.reporting_start_date)
+              }
               fullWidth
             >
               {savingLocation ? (
@@ -5793,6 +5870,23 @@ export function LocationDetailPage() {
     }
     return false;
   })();
+  const activeTabCreateLabel =
+    activeTab === 15
+      ? "Add Particular"
+      : activeTab === 16
+        ? "Add Remission"
+        : locationTabActions[activeTab];
+  const openActiveTabCreate = () => {
+    if (activeTab === 15) {
+      openLocationParticularDrawer();
+      return;
+    }
+    if (activeTab === 16) {
+      openLocationRemissionDrawer();
+      return;
+    }
+    openActionDrawer(activeTab);
+  };
   const submitLoadingActive =
     savingLocation ||
     requisitionSaving ||
@@ -5808,7 +5902,8 @@ export function LocationDetailPage() {
     zoneEditSaving ||
     familyMemberSaving ||
     familyEditSaving;
-  const showRelatedLoadingOverlay = relatedLoading && !submitLoadingActive;
+  const showRelatedLoadingOverlay =
+    Boolean(location) && relatedLoading && !submitLoadingActive;
   const canEditLocation = isLocationManagerForUi;
   const canDeleteLocation = isLocationOwner;
   const ministryHasOtherHq = ministryLocations.some(
@@ -6480,18 +6575,15 @@ export function LocationDetailPage() {
     return Math.max(Math.ceil(days / 7), 1);
   };
   const mandatoryTypesForLocation = (sender: Location) => {
-    const receiver = sender.parent_location_id
-      ? [location, ...ministryLocations].find((item) =>
-          idsEqual(item.id, sender.parent_location_id),
-        )
-      : [location, ...ministryLocations].find(
-          (item) => Boolean(item.is_hq) && !idsEqual(item.id, sender.id),
-        );
-    const mandatoryTypes = (
-      receiver?.mandatory_report_schedule_types ||
-      sender.mandatory_report_schedule_types ||
-      ""
-    )
+    const ministryScope = [location, ...ministryLocations];
+    const hqLocation =
+      ministryScope.find(
+        (item) =>
+          Boolean(item.is_hq) &&
+          (idsEqual(item.owner_id, sender.owner_id) ||
+            idsEqual(item.id, sender.owner_id)),
+      ) || ministryScope.find((item) => Boolean(item.is_hq));
+    const mandatoryTypes = (hqLocation?.mandatory_report_schedule_types || "")
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
@@ -6506,7 +6598,6 @@ export function LocationDetailPage() {
       schedule.time! <= dayjs().format("HH:mm:ss"));
   const pendingReportCountForLocation = (
     sender: Location,
-    reports: AggregatedReportCard[],
     reportingStartDate: string,
     mandatoryTypes: string[],
   ) => {
@@ -6530,11 +6621,13 @@ export function LocationDetailPage() {
     const senderSchedules = schedules.filter(
       (schedule) =>
         idsEqual(schedule.location_id, sender.id) &&
-        mandatoryTypes.includes(schedule.type || ""),
+        mandatoryTypes.includes(schedule.type || "") &&
+        (schedule.report_status || "Pending").toLowerCase() !== "reported",
     );
 
-    return senderSchedules.reduce((total, schedule) => {
-      const missingOccurrences = occurrenceDates(
+    const pendingDates = new Set<string>();
+    senderSchedules.forEach((schedule) => {
+      occurrenceDates(
         schedule,
         reportWindowEnd,
         effectiveStartDate,
@@ -6542,20 +6635,13 @@ export function LocationDetailPage() {
         .map((occurrence) => occurrence.format("YYYY-MM-DD"))
         .filter(
           (scheduleDate) =>
-            !dayjs(scheduleDate).isBefore(reportWindowStart, "day") &&
+            dayjs(scheduleDate).isAfter(reportWindowStart, "day") &&
             !dayjs(scheduleDate).isAfter(reportWindowEnd, "day") &&
-            isDueReportScheduleDate(schedule, scheduleDate) &&
-            !reports.some(
-              (card) =>
-                card.scheduleDate === scheduleDate &&
-                (card.scheduleTypes.includes(schedule.type || "") ||
-                  card.scheduleSummaries.some(
-                    (summary) => summary.id === schedule.id,
-                  )),
-            ),
-        ).length;
-      return total + missingOccurrences;
-    }, 0);
+            isDueReportScheduleDate(schedule, scheduleDate),
+        )
+        .forEach((scheduleDate) => pendingDates.add(scheduleDate));
+    });
+    return pendingDates.size;
   };
   const receivedReportLocationStats = activeReportSenderLocations.map(
     (sender) => {
@@ -6601,12 +6687,10 @@ export function LocationDetailPage() {
       const averageAttendance = attendance / weekCount;
       const averageCollections = collections / weekCount;
       const averageRemissions = remissions / weekCount;
-      const mandatoryTypes = mandatoryTypesForLocation(sender);
       const pendingReports = pendingReportCountForLocation(
         sender,
-        reports,
         reportingStartDate,
-        mandatoryTypes,
+        mandatoryTypesForLocation(sender),
       );
       const scheduleDateRange = reportCardsScheduleDateRange(reports);
       return {
@@ -7841,8 +7925,8 @@ export function LocationDetailPage() {
                 activeTab !== 10 &&
                 activeTab !== 11 ? (
                   <CircularAddButton
-                    label={locationTabActions[activeTab]}
-                    onClick={() => openActionDrawer(activeTab)}
+                    label={activeTabCreateLabel}
+                    onClick={openActiveTabCreate}
                   />
                 ) : null}
               </Stack>
@@ -8373,9 +8457,6 @@ export function LocationDetailPage() {
                       <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
                         Requisitions
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Expense requisitions prepared for this location.
-                      </Typography>
                     </Box>
                     {canCreateForActiveTab ? (
                       <CircularAddButton
@@ -8440,15 +8521,18 @@ export function LocationDetailPage() {
                                       <Typography
                                         variant="caption"
                                         color="text.secondary"
+                                        sx={{ display: "block" }}
                                       >
-                                        {[
-                                          requisition.prepared_by_display_name
-                                            ? `Prepared by ${requisition.prepared_by_display_name}`
-                                            : null,
-                                          requisition.date,
-                                        ]
-                                          .filter(Boolean)
-                                          .join(" - ")}
+                                        {requisition.prepared_by_display_name
+                                          ? `Prepared by ${requisition.prepared_by_display_name}`
+                                          : "Preparer not set"}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ display: "block" }}
+                                      >
+                                        {formatDisplayDate(requisition.date)}
                                       </Typography>
                                       {requisition.description ? (
                                         <Typography
@@ -8557,7 +8641,8 @@ export function LocationDetailPage() {
                                       color={isApproved ? "success" : "warning"}
                                       sx={{ flex: 1 }}
                                     />
-                                    {canApproveRequisitionsForUi ? (
+                                    {canApproveRequisitionsForUi &&
+                                    !isApproved ? (
                                       <Button
                                         variant="contained"
                                         color="secondary"
@@ -8568,7 +8653,6 @@ export function LocationDetailPage() {
                                             "approve",
                                           )
                                         }
-                                        disabled={isApproved}
                                         sx={{ flex: 1 }}
                                       >
                                         Approve
@@ -8868,7 +8952,10 @@ export function LocationDetailPage() {
                           variant="outlined"
                           color="error"
                           startIcon={<DeleteIcon />}
-                          onClick={deleteLocation}
+                          onClick={() => {
+                            setLocationDeleteError("");
+                            setLocationDeleteOpen(true);
+                          }}
                         >
                           Delete Location
                         </Button>
@@ -8879,107 +8966,9 @@ export function LocationDetailPage() {
               </TabPanel>
               <TabPanel value={activeTab} index={15}>
                 <Stack spacing={2}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                      Particulars
-                    </Typography>
-                    {locationParticularError ? (
-                      <Alert severity="error" sx={{ mb: 2 }}>
-                        {locationParticularError}
-                      </Alert>
-                    ) : null}
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0, 1fr))",
-                          md: "repeat(4, minmax(0, 1fr))",
-                        },
-                        gap: 1.5,
-                        alignItems: "center",
-                      }}
-                    >
-                      <TextField
-                        size="small"
-                        label="Particular"
-                        value={locationParticularForm.title}
-                        onChange={(event) =>
-                          setLocationParticularForm((current) => ({
-                            ...current,
-                            title: event.target.value,
-                          }))
-                        }
-                        fullWidth
-                      />
-                      <TextField
-                        size="small"
-                        select
-                        label="Category"
-                        value={locationParticularForm.category}
-                        onChange={(event) =>
-                          setLocationParticularForm((current) => ({
-                            ...current,
-                            category: event.target.value,
-                          }))
-                        }
-                        fullWidth
-                      >
-                        {["Income", "Expense"].map((category) => (
-                          <MenuItem key={category} value={category}>
-                            {category}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                      <TextField
-                        size="small"
-                        select
-                        label="Type"
-                        value={locationParticularForm.type}
-                        onChange={(event) =>
-                          setLocationParticularForm((current) => ({
-                            ...current,
-                            type: event.target.value,
-                          }))
-                        }
-                        fullWidth
-                      >
-                        {particularTypes.map((type) => (
-                          <MenuItem key={type} value={type}>
-                            {type}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                      <Button
-                        variant="contained"
-                        startIcon={
-                          editingLocationParticularId ? (
-                            <SaveIcon />
-                          ) : (
-                            <AddIcon />
-                          )
-                        }
-                        onClick={saveLocationParticular}
-                        disabled={
-                          !locationParticularForm.title.trim() ||
-                          !locationParticularForm.category ||
-                          !locationParticularForm.type
-                        }
-                        fullWidth
-                      >
-                        {editingLocationParticularId ? "Update" : "Add"}
-                      </Button>
-                    </Box>
-                    {editingLocationParticularId ? (
-                      <Button
-                        size="small"
-                        onClick={resetLocationParticularForm}
-                        sx={{ mt: 1.5 }}
-                      >
-                        Cancel Edit
-                      </Button>
-                    ) : null}
-                  </Paper>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                    Particulars
+                  </Typography>
                   <TextField
                     size="small"
                     label="Search particulars"
@@ -9070,127 +9059,9 @@ export function LocationDetailPage() {
               </TabPanel>
               <TabPanel value={activeTab} index={16}>
                 <Stack spacing={2}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                      Remissions
-                    </Typography>
-                    {remissionError ? (
-                      <Alert severity="error" sx={{ mb: 2 }}>
-                        {remissionError}
-                      </Alert>
-                    ) : null}
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0, 1fr))",
-                          lg: "repeat(4, minmax(0, 1fr))",
-                        },
-                        gap: 1.5,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Autocomplete
-                        options={incomeLocationParticulars}
-                        value={
-                          incomeLocationParticulars.find((particular) =>
-                            idsEqual(
-                              particular.particular_id,
-                              remissionForm.particular_id,
-                            ),
-                          ) || null
-                        }
-                        onChange={(_, value) =>
-                          updateRemissionForm({
-                            particular_id: value?.particular_id || "",
-                          })
-                        }
-                        getOptionLabel={(particular) =>
-                          particular.title ||
-                          `Particular #${particular.particular_id}`
-                        }
-                        isOptionEqualToValue={(option, value) =>
-                          idsEqual(option.particular_id, value.particular_id)
-                        }
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Particular"
-                            size="small"
-                            required
-                            fullWidth
-                          />
-                        )}
-                        fullWidth
-                      />
-                      <TextField
-                        label="Title"
-                        size="small"
-                        value={remissionForm.title}
-                        onChange={(event) =>
-                          updateRemissionForm({ title: event.target.value })
-                        }
-                        fullWidth
-                        required
-                      />
-                      <TextField
-                        label="Percentage"
-                        size="small"
-                        type="number"
-                        value={remissionForm.percentage}
-                        onChange={(event) =>
-                          updateRemissionForm({
-                            percentage: event.target.value,
-                          })
-                        }
-                        fullWidth
-                        required
-                      />
-                      <Button
-                        variant="contained"
-                        startIcon={
-                          editingRemissionId ? <SaveIcon /> : <AddIcon />
-                        }
-                        onClick={handleSaveLocationRemission}
-                        disabled={
-                          remissionSaving ||
-                          !remissionForm.title.trim() ||
-                          !remissionForm.percentage ||
-                          !remissionForm.particular_id
-                        }
-                        fullWidth
-                      >
-                        {remissionSaving
-                          ? "Saving..."
-                          : editingRemissionId
-                            ? "Update"
-                            : "Add"}
-                      </Button>
-                    </Box>
-                    <TextField
-                      label="Description"
-                      size="small"
-                      value={remissionForm.description}
-                      onChange={(event) =>
-                        updateRemissionForm({ description: event.target.value })
-                      }
-                      multiline
-                      minRows={2}
-                      fullWidth
-                      sx={{ mt: 1.5 }}
-                    />
-                    {editingRemissionId ? (
-                      <Button
-                        size="small"
-                        onClick={resetRemissionForm}
-                        disabled={remissionSaving}
-                        sx={{ mt: 1.5 }}
-                      >
-                        Cancel Edit
-                      </Button>
-                    ) : null}
-                  </Paper>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                    Remissions
+                  </Typography>
                   {locationRemissions.length === 0 ? (
                     <EmptyState
                       title="No remissions for this location yet"
@@ -10794,7 +10665,13 @@ export function LocationDetailPage() {
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAttendanceEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setAttendanceEditOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={() => void saveAttendanceEdit()}
@@ -10904,7 +10781,13 @@ export function LocationDetailPage() {
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMfAttendanceEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setMfAttendanceEditOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={() => void saveMfAttendanceEdit()}
@@ -12424,7 +12307,13 @@ export function LocationDetailPage() {
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setScheduleEdit(null)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setScheduleEdit(null)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={saveScheduleEdit}
@@ -12770,6 +12659,9 @@ export function LocationDetailPage() {
             Edit Location
           </Typography>
           <Stack spacing={2}>
+            {locationEditError ? (
+              <Alert severity="error">{locationEditError}</Alert>
+            ) : null}
             <TextField
               label="Location Name"
               value={locationEditForm.title}
@@ -12887,20 +12779,83 @@ export function LocationDetailPage() {
               fullWidth
             />
             <Stack direction="row" spacing={1.5}>
-              <Button variant="contained" onClick={saveLocationEdit}>
-                Save
+              <Button
+                variant="contained"
+                onClick={saveLocationEdit}
+                disabled={locationEditSaving}
+                startIcon={
+                  locationEditSaving ? (
+                    <CircularProgress color="inherit" size={16} />
+                  ) : null
+                }
+              >
+                {locationEditSaving ? "Saving..." : "Save"}
               </Button>
-              <Button onClick={() => setLocationEditOpen(false)}>Cancel</Button>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => setLocationEditOpen(false)}
+                disabled={locationEditSaving}
+              >
+                Close
+              </Button>
             </Stack>
           </Stack>
         </Box>
       </Drawer>
       <Dialog
+        open={locationDeleteOpen}
+        onClose={() => {
+          if (!locationDeleteSaving) {
+            setLocationDeleteOpen(false);
+          }
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete Location</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="warning">
+              This will permanently delete this location and its related records.
+            </Alert>
+            {locationDeleteError ? (
+              <Alert severity="error">{locationDeleteError}</Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setLocationDeleteOpen(false)}
+            disabled={locationDeleteSaving}
+          >
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={deleteLocation}
+            disabled={locationDeleteSaving}
+            startIcon={
+              locationDeleteSaving ? (
+                <CircularProgress color="inherit" size={16} />
+              ) : (
+                <DeleteIcon />
+              )
+            }
+          >
+            {locationDeleteSaving ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Drawer
+        anchor="right"
         open={locationParticularsOpen}
         onClose={() => setLocationParticularsOpen(false)}
-        fullWidth
-        maxWidth="sm"
       >
+        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
         <DialogTitle>Particulars</DialogTitle>
         <DialogContent>
           {locationParticularError ? (
@@ -12911,10 +12866,7 @@ export function LocationDetailPage() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-              },
+              gridTemplateColumns: "1fr",
               gap: 1.5,
               mb: 2,
               mt: 1,
@@ -12971,38 +12923,6 @@ export function LocationDetailPage() {
                 </MenuItem>
               ))}
             </TextField>
-            {editingLocationParticularId ? (
-              <Button
-                variant="contained"
-                onClick={saveLocationParticular}
-                startIcon={<SaveIcon />}
-                disabled={
-                  !locationParticularForm.title.trim() ||
-                  !locationParticularForm.category ||
-                  !locationParticularForm.type
-                }
-                sx={{ minWidth: 120, justifySelf: { sm: "start" } }}
-              >
-                Update
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={saveLocationParticular}
-                disabled={
-                  !locationParticularForm.title.trim() ||
-                  !locationParticularForm.category ||
-                  !locationParticularForm.type
-                }
-                sx={{
-                  gridColumn: { xs: "1 / -1", sm: "auto" },
-                  justifySelf: "stretch",
-                }}
-              >
-                Add
-              </Button>
-            )}
           </Box>
           {editingLocationParticularId ? (
             <Button
@@ -13010,108 +12930,43 @@ export function LocationDetailPage() {
               onClick={resetLocationParticularForm}
               sx={{ mb: 2 }}
             >
-              Cancel Edit
+              Close Edit
             </Button>
           ) : null}
-          <TextField
-            size="small"
-            label="Search particulars"
-            value={locationParticularSearch}
-            onChange={(event) =>
-              setLocationParticularSearch(event.target.value)
-            }
-            fullWidth
-            sx={{ mb: 1 }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <List
-            dense
-            disablePadding
-            sx={{
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 1,
-              overflow: "hidden",
-            }}
-          >
-            {filteredLocationParticulars.map((particular) => (
-              <ListItem
-                key={particular.particular_id}
-                divider
-                secondaryAction={
-                  <Stack direction="row" spacing={0.5}>
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      aria-label={`Edit ${particular.title || "particular"}`}
-                      onClick={() => editLocationParticular(particular)}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      color="error"
-                      aria-label={`Remove ${particular.title || "particular"}`}
-                      onClick={() => removeLocationParticular(particular)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Stack>
-                }
-                sx={{ py: 1 }}
-              >
-                <ListItemIcon sx={{ minWidth: 38 }}>
-                  <CollectionsBookmarkIcon color="secondary" fontSize="small" />
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    particular.title ||
-                    `Particular #${particular.particular_id}`
-                  }
-                  secondary={[
-                    particular.category || "No category",
-                    particular.type || "General",
-                  ].join(" - ")}
-                  sx={{ pr: 8 }}
-                  slotProps={{
-                    primary: { sx: { fontWeight: 800 } },
-                    secondary: { noWrap: true },
-                  }}
-                />
-              </ListItem>
-            ))}
-            {!filteredLocationParticulars.length ? (
-              <ListItem disableGutters>
-                <ListItemText primary="No particulars found" />
-              </ListItem>
-            ) : null}
-          </List>
         </DialogContent>
-        <DialogActions>
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={() => setLocationParticularsOpen(false)}
-          >
-            Close
-          </Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => setLocationParticularsOpen(false)}
+              fullWidth
+            >
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={editingLocationParticularId ? <SaveIcon /> : <AddIcon />}
+              onClick={saveLocationParticular}
+              disabled={
+                !locationParticularForm.title.trim() ||
+                !locationParticularForm.category ||
+                !locationParticularForm.type
+              }
+              fullWidth
+            >
+              {editingLocationParticularId ? "Update" : "Add"}
+            </Button>
+          </Stack>
         </DialogActions>
-      </Dialog>
-      <Dialog
+        </Box>
+      </Drawer>
+      <Drawer
+        anchor="right"
         open={locationRemissionsOpen}
         onClose={() => setLocationRemissionsOpen(false)}
-        fullWidth
-        maxWidth="sm"
       >
+        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
         <DialogTitle>Location Remissions</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -13144,27 +12999,25 @@ export function LocationDetailPage() {
               )}
               fullWidth
             />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Title"
-                value={remissionForm.title}
-                onChange={(event) =>
-                  updateRemissionForm({ title: event.target.value })
-                }
-                fullWidth
-                required
-              />
-              <TextField
-                label="Percentage"
-                type="number"
-                value={remissionForm.percentage}
-                onChange={(event) =>
-                  updateRemissionForm({ percentage: event.target.value })
-                }
-                fullWidth
-                required
-              />
-            </Stack>
+            <TextField
+              label="Title"
+              value={remissionForm.title}
+              onChange={(event) =>
+                updateRemissionForm({ title: event.target.value })
+              }
+              fullWidth
+              required
+            />
+            <TextField
+              label="Percentage"
+              type="number"
+              value={remissionForm.percentage}
+              onChange={(event) =>
+                updateRemissionForm({ percentage: event.target.value })
+              }
+              fullWidth
+              required
+            />
             <TextField
               label="Description"
               value={remissionForm.description}
@@ -13175,96 +13028,46 @@ export function LocationDetailPage() {
               minRows={3}
               fullWidth
             />
-            <Divider />
-            {locationRemissions.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No remissions for this location yet.
-              </Typography>
-            ) : (
-              <List
-                dense
-                sx={{ border: 1, borderColor: "divider", borderRadius: 1 }}
-              >
-                {locationRemissions.map((remission) => (
-                  <ListItem
-                    key={remission.id}
-                    divider
-                    secondaryAction={
-                      <Stack direction="row" spacing={0.5}>
-                        <IconButton
-                          edge="end"
-                          size="small"
-                          aria-label={`Edit ${remission.title || "remission"}`}
-                          onClick={() => handleEditLocationRemission(remission)}
-                          disabled={remissionSaving}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          size="small"
-                          aria-label={`Remove ${remission.title || "remission"}`}
-                          onClick={() =>
-                            handleDeleteLocationRemission(remission)
-                          }
-                          disabled={remissionSaving}
-                          color="error"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    }
-                  >
-                    <ListItemText
-                      primary={`${remission.title || `Remission #${remission.id}`} (${Number(remission.percentage || 0)}%)`}
-                      secondary={[
-                        incomeLocationParticulars.find((particular) =>
-                          idsEqual(
-                            particular.particular_id,
-                            remission.particular_id,
-                          ),
-                        )?.title || "No particular selected",
-                        remission.description || "No description",
-                      ].join(" - ")}
-                      sx={{ pr: 8 }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
           {editingRemissionId ? (
             <Button onClick={resetRemissionForm} disabled={remissionSaving}>
-              Cancel Edit
+              Close Edit
             </Button>
           ) : null}
-          <Button
-            onClick={() => setLocationRemissionsOpen(false)}
-            disabled={remissionSaving}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />}
-            onClick={handleSaveLocationRemission}
-            disabled={
-              remissionSaving ||
-              !remissionForm.title.trim() ||
-              !remissionForm.percentage ||
-              !remissionForm.particular_id
-            }
-          >
-            {remissionSaving
-              ? "Saving..."
-              : editingRemissionId
-                ? "Update Remission"
-                : "Add Remission"}
-          </Button>
+          <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => setLocationRemissionsOpen(false)}
+              disabled={remissionSaving}
+              fullWidth
+            >
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />}
+              onClick={handleSaveLocationRemission}
+              disabled={
+                remissionSaving ||
+                !remissionForm.title.trim() ||
+                !remissionForm.percentage ||
+                !remissionForm.particular_id
+              }
+              fullWidth
+            >
+              {remissionSaving
+                ? "Saving..."
+                : editingRemissionId
+                  ? "Update"
+                  : "Add"}
+            </Button>
+          </Stack>
         </DialogActions>
-      </Dialog>
+        </Box>
+      </Drawer>
       <Dialog
         open={locationDetailsOpen}
         onClose={() => setLocationDetailsOpen(false)}
@@ -14017,7 +13820,13 @@ export function CashbookActionsMenu({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setDeleteConfirmOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             color="error"
             variant="contained"
@@ -14052,7 +13861,13 @@ export function CashbookActionsMenu({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCloseConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setCloseConfirmOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             color="secondary"
             variant="contained"
@@ -14120,7 +13935,13 @@ export function CashbookActionsMenu({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRolesOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setRolesOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={saveRole}
@@ -14226,7 +14047,13 @@ export function CashbookActionsMenu({
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setEditOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={saveEdit}
@@ -14892,7 +14719,10 @@ function LocationActionDrawer({
                       ) : null}
                       <TextField
                         type="number"
-                        label={scheduleLabel(schedule)}
+                        label={
+                          scheduleNameTypeLabel(schedule) ||
+                          `Schedule #${schedule.id}`
+                        }
                         value={
                           source === "mf"
                             ? String(aggregateTotal)
@@ -14905,11 +14735,6 @@ function LocationActionDrawer({
                               [schedule.id]: event.target.value,
                             },
                           })
-                        }
-                        helperText={
-                          source === "mf"
-                            ? `${coverage.recorded} of ${coverage.total} missional families recorded`
-                            : undefined
                         }
                         required={source === "manual"}
                         slotProps={{
@@ -15278,7 +15103,10 @@ function LocationActionDrawer({
                         <TextField
                           key={schedule.id}
                           type="number"
-                          label={`Total Number - ${scheduleLabel(schedule)}`}
+                          label={
+                            scheduleNameTypeLabel(schedule) ||
+                            `Schedule #${schedule.id}`
+                          }
                           value={form.attendance_records[schedule.id] || ""}
                           onChange={(event) =>
                             onChange({
@@ -15545,7 +15373,7 @@ export function CashbookDetailPage() {
   const [particularForm, setParticularForm] = useState({
     title: "",
     category: "",
-    type: "General",
+    type: "",
   });
   const [particularSearch, setParticularSearch] = useState("");
   const [editingParticularId, setEditingParticularId] = useState<string | null>(
@@ -16219,9 +16047,14 @@ export function CashbookDetailPage() {
   };
 
   const resetParticularForm = () => {
-    setParticularForm({ title: "", category: "", type: "General" });
+    setParticularForm({ title: "", category: "", type: "" });
     setEditingParticularId(null);
     setParticularError("");
+  };
+
+  const openParticularsModal = () => {
+    resetParticularForm();
+    setParticularsOpen(true);
   };
 
   const saveParticular = async () => {
@@ -16874,6 +16707,30 @@ export function CashbookDetailPage() {
                             required
                             error={Boolean(transactionValidation.particular_id)}
                             helperText={transactionValidation.particular_id}
+                            slotProps={{
+                              input: {
+                                endAdornment: (
+                                  <InputAdornment
+                                    position="end"
+                                    sx={{ mr: 2 }}
+                                  >
+                                    <Tooltip title="Add particular">
+                                      <IconButton
+                                        edge="end"
+                                        size="small"
+                                        aria-label="Add particular"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openParticularsModal();
+                                        }}
+                                      >
+                                        <AddIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </InputAdornment>
+                                ),
+                              },
+                            }}
                           >
                             <MenuItem value="">Select particular</MenuItem>
                             {generalParticulars.map((particular) => (
@@ -17107,6 +16964,32 @@ export function CashbookDetailPage() {
                                 helperText={
                                   scheduleCollectionValidation.particular_id
                                 }
+                                slotProps={{
+                                  ...params.slotProps,
+                                  input: {
+                                    ...params.slotProps.input,
+                                    endAdornment: (
+                                      <>
+                                        <InputAdornment position="end">
+                                          <Tooltip title="Add collection">
+                                            <IconButton
+                                              edge="end"
+                                              size="small"
+                                              aria-label="Add collection"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                openParticularsModal();
+                                              }}
+                                            >
+                                              <AddIcon fontSize="small" />
+                                            </IconButton>
+                                          </Tooltip>
+                                        </InputAdornment>
+                                        {params.slotProps.input?.endAdornment}
+                                      </>
+                                    ),
+                                  },
+                                }}
                               />
                             )}
                             fullWidth
@@ -17652,6 +17535,27 @@ export function CashbookDetailPage() {
                   }
                   fullWidth
                   required
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end" sx={{ mr: 2 }}>
+                          <Tooltip title="Add particular">
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              aria-label="Add particular"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openParticularsModal();
+                              }}
+                            >
+                              <AddIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
                 >
                   {["Income", "Expense"].map((category) => (
                     <MenuItem key={category} value={category}>
@@ -17778,7 +17682,13 @@ export function CashbookDetailPage() {
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setTransactionEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setTransactionEditOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={saveTransactionEdit}
@@ -18113,7 +18023,13 @@ export function CashbookDetailPage() {
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCashbookEditOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setCashbookEditOpen(false)}
+          >
+            Close
+          </Button>
           <Button
             variant="contained"
             onClick={saveCashbookEdit}
@@ -18395,7 +18311,7 @@ export function CashbookDetailPage() {
           </Box>
           {editingParticularId ? (
             <Button size="small" onClick={resetParticularForm} sx={{ mb: 2 }}>
-              Cancel Edit
+              Close Edit
             </Button>
           ) : null}
           <TextField
