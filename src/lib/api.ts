@@ -71,7 +71,6 @@ export type Account = {
   id: string;
   fname?: string | null;
   lname?: string | null;
-  handle?: string | null;
   username?: string | null;
   title?: string | null;
   email?: string | null;

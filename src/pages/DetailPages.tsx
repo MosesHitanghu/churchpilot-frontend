@@ -118,6 +118,7 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import ConfirmDeleteDialog from "../components/ConfirmDeleteDialog";
 import { CustomDataGridToolbar } from "../components/DataGridToolbar";
 import { EmptyState } from "../components/EmptyState";
 import {
@@ -2273,6 +2274,13 @@ export function LocationDetailPage() {
   const [locationDeleteOpen, setLocationDeleteOpen] = useState(false);
   const [locationDeleteSaving, setLocationDeleteSaving] = useState(false);
   const [locationDeleteError, setLocationDeleteError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [deleteConfirmSaving, setDeleteConfirmSaving] = useState(false);
+  const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [locationDetailsOpen, setLocationDetailsOpen] = useState(false);
   const [locationParticularsOpen, setLocationParticularsOpen] = useState(false);
   const [locationParticularSearch, setLocationParticularSearch] = useState("");
@@ -2337,6 +2345,39 @@ export function LocationDetailPage() {
     leader1_id: "",
     leader2_id: "",
   });
+
+  const requestDeleteConfirmation = (
+    title: string,
+    description: string,
+    onConfirm: () => Promise<void> | void,
+  ) => {
+    setDeleteConfirm({ title, description, onConfirm });
+    setDeleteConfirmError("");
+  };
+
+  const closeDeleteConfirmation = () => {
+    if (deleteConfirmSaving) {
+      return;
+    }
+    setDeleteConfirm(null);
+    setDeleteConfirmError("");
+  };
+
+  const confirmPendingDelete = async () => {
+    if (!deleteConfirm) {
+      return;
+    }
+    setDeleteConfirmSaving(true);
+    setDeleteConfirmError("");
+    try {
+      await deleteConfirm.onConfirm();
+      setDeleteConfirm(null);
+    } catch (requestError) {
+      setDeleteConfirmError(getApiErrorMessage(requestError, "Failed to delete record"));
+    } finally {
+      setDeleteConfirmSaving(false);
+    }
+  };
   const [locationEditForm, setLocationEditForm] = useState({
     title: "",
     type: "",
@@ -3692,7 +3733,8 @@ export function LocationDetailPage() {
           status: reportForm.status,
         });
       }
-      await loadRelatedRecords();
+      setActiveTab(10);
+      await loadRelatedRecords(["reports"]);
       setReportCreateOpen(false);
       setReportEditOpen(false);
       setReportEditCard(null);
@@ -3843,7 +3885,7 @@ export function LocationDetailPage() {
   };
 
   const deleteFinancialReport = async (report: LocationReport) => {
-    if (!account || !window.confirm("Delete this financial report?")) {
+    if (!account) {
       return;
     }
     setFinancialReportError("");
@@ -3914,7 +3956,7 @@ export function LocationDetailPage() {
       return;
     }
     closeZoneMenu();
-    setActiveTab(7);
+    setActiveTab(1);
     setActionTab(7);
     setMembershipView("missionalFamilies");
     setActionForm({
@@ -4389,6 +4431,17 @@ export function LocationDetailPage() {
 
   const openLocationParticularDrawer = () => {
     resetLocationParticularForm();
+    setLocationParticularError("");
+    setLocationParticularsOpen(true);
+  };
+
+  const openExpenseParticularDrawer = () => {
+    resetLocationParticularForm();
+    setLocationParticularForm((current) => ({
+      ...current,
+      category: "Expense",
+      type: current.type || "General",
+    }));
     setLocationParticularError("");
     setLocationParticularsOpen(true);
   };
@@ -6218,7 +6271,18 @@ export function LocationDetailPage() {
       {},
     ),
   )
-    .sort(([left], [right]) => right.localeCompare(left))
+    .sort(([left], [right]) => {
+      if (left === "unknown" && right === "unknown") {
+        return 0;
+      }
+      if (left === "unknown") {
+        return 1;
+      }
+      if (right === "unknown") {
+        return -1;
+      }
+      return right.localeCompare(left);
+    })
     .map(([scheduleDate, reports]) => {
       const attendanceTotal = reports
         .filter((report) => report.type === "Attendance")
@@ -6521,25 +6585,40 @@ export function LocationDetailPage() {
         : selectedReportMenu === receivedReportMenuOption
           ? receivedReportCards
           : [];
-  const filteredReportCards = activeReportCards.filter((card) => {
-    const searchValue = reportFilters.locationSearch.trim().toLowerCase();
-    const sourceTitle = String(
-      card.sourceTitle || location.title || "",
-    ).toLowerCase();
-    if (searchValue && !sourceTitle.includes(searchValue)) {
-      return false;
-    }
-    if (
-      reportFilters.startDate &&
-      card.scheduleDate < reportFilters.startDate
-    ) {
-      return false;
-    }
-    if (reportFilters.endDate && card.scheduleDate > reportFilters.endDate) {
-      return false;
-    }
-    return true;
-  });
+  const filteredReportCards = activeReportCards
+    .filter((card) => {
+      const searchValue = reportFilters.locationSearch.trim().toLowerCase();
+      const sourceTitle = String(
+        card.sourceTitle || location.title || "",
+      ).toLowerCase();
+      if (searchValue && !sourceTitle.includes(searchValue)) {
+        return false;
+      }
+      if (
+        reportFilters.startDate &&
+        card.scheduleDate < reportFilters.startDate
+      ) {
+        return false;
+      }
+      if (reportFilters.endDate && card.scheduleDate > reportFilters.endDate) {
+        return false;
+      }
+      return true;
+    })
+    .sort((left, right) => {
+      const leftDate = left.scheduleDate || "";
+      const rightDate = right.scheduleDate || "";
+      if (!leftDate && !rightDate) {
+        return 0;
+      }
+      if (!leftDate) {
+        return 1;
+      }
+      if (!rightDate) {
+        return -1;
+      }
+      return rightDate.localeCompare(leftDate);
+    });
   const receivedReportSenderLocations = [
     ...branches,
     ...ministryLocations.filter(
@@ -8015,7 +8094,7 @@ export function LocationDetailPage() {
                     display: "grid",
                     placeItems: "center",
                     pointerEvents: "none",
-                    bgcolor: "rgba(255, 255, 255, 0.45)",
+                    bgcolor: "background.paper",
                   }}
                 >
                   <CircularProgress />
@@ -8780,7 +8859,11 @@ export function LocationDetailPage() {
                     }
                     onClick={() =>
                       selectedRequisition &&
-                      deleteRequisition(selectedRequisition)
+                      requestDeleteConfirmation(
+                        "Delete Requisition?",
+                        `This will permanently delete ${selectedRequisition.title || "this requisition"}.`,
+                        () => deleteRequisition(selectedRequisition),
+                      )
                     }
                   >
                     <ListItemIcon>
@@ -9088,7 +9171,11 @@ export function LocationDetailPage() {
                               color="error"
                               aria-label={`Remove ${particular.title || "particular"}`}
                               onClick={() =>
-                                removeLocationParticular(particular)
+                                requestDeleteConfirmation(
+                                  "Delete Particular?",
+                                  `This will permanently delete ${particular.title || "this particular"}.`,
+                                  () => removeLocationParticular(particular),
+                                )
                               }
                             >
                               <DeleteIcon fontSize="small" />
@@ -9169,7 +9256,11 @@ export function LocationDetailPage() {
                                 size="small"
                                 aria-label={`Remove ${remission.title || "remission"}`}
                                 onClick={() =>
-                                  handleDeleteLocationRemission(remission)
+                                  requestDeleteConfirmation(
+                                    "Delete Remission?",
+                                    `This will permanently delete ${remission.title || "this remission"}.`,
+                                    () => handleDeleteLocationRemission(remission),
+                                  )
                                 }
                                 disabled={remissionSaving}
                                 color="error"
@@ -9488,7 +9579,13 @@ export function LocationDetailPage() {
                   mandatoryTypes={mandatoryTypesForLocation(location)}
                   onDetails={setScheduleDetails}
                   onEdit={openScheduleEdit}
-                  onRemove={removeSchedule}
+                  onRemove={(schedule) =>
+                    requestDeleteConfirmation(
+                      "Delete Schedule?",
+                      `This will permanently delete ${schedule.title || "this schedule"}.`,
+                      () => removeSchedule(schedule),
+                    )
+                  }
                 />
               </TabPanel>
               <TabPanel value={activeTab} index={9}>
@@ -10650,7 +10747,15 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Edit
         </MenuItem>
-        <MenuItem onClick={() => void deleteSelectedAttendance()}>
+        <MenuItem
+          onClick={() =>
+            requestDeleteConfirmation(
+              "Delete Attendance?",
+              "This will permanently delete the selected attendance record.",
+              () => deleteSelectedAttendance(),
+            )
+          }
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
@@ -11018,7 +11123,11 @@ export function LocationDetailPage() {
         <MenuItem
           onClick={() => {
             if (selectedFinancialReport) {
-              deleteFinancialReport(selectedFinancialReport);
+              requestDeleteConfirmation(
+                "Delete Financial Report?",
+                `This will permanently delete ${selectedFinancialReport.title || "this financial report"}.`,
+                () => deleteFinancialReport(selectedFinancialReport),
+              );
             }
           }}
         >
@@ -11320,7 +11429,15 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Edit
         </MenuItem>
-        <MenuItem onClick={() => void deleteSelectedZone()}>
+        <MenuItem
+          onClick={() =>
+            requestDeleteConfirmation(
+              "Delete Zone?",
+              `This will permanently delete ${selectedZone?.title || "this zone"}.`,
+              () => deleteSelectedZone(),
+            )
+          }
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
@@ -11447,7 +11564,15 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Edit
         </MenuItem>
-        <MenuItem onClick={() => void deleteSelectedFamily()}>
+        <MenuItem
+          onClick={() =>
+            requestDeleteConfirmation(
+              "Delete Missional Family?",
+              `This will permanently delete ${selectedFamily?.title || "this missional family"}.`,
+              () => deleteSelectedFamily(),
+            )
+          }
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
@@ -11475,7 +11600,15 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Edit
         </MenuItem>
-        <MenuItem onClick={() => void deleteSelectedLocationMember()}>
+        <MenuItem
+          onClick={() =>
+            requestDeleteConfirmation(
+              "Delete Member?",
+              "This will remove the selected member from this location.",
+              () => deleteSelectedLocationMember(),
+            )
+          }
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
@@ -11547,7 +11680,13 @@ export function LocationDetailPage() {
             </MenuItem>,
             <MenuItem
               key="delete"
-              onClick={() => void deleteSelectedLocationRole()}
+              onClick={() =>
+                requestDeleteConfirmation(
+                  "Delete Role?",
+                  "This will remove the selected role assignment.",
+                  () => deleteSelectedLocationRole(),
+                )
+              }
             >
               <ListItemIcon>
                 <DeleteIcon fontSize="small" />
@@ -11580,7 +11719,15 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Edit
         </MenuItem>
-        <MenuItem onClick={() => void deleteSelectedBranch()}>
+        <MenuItem
+          onClick={() =>
+            requestDeleteConfirmation(
+              "Delete Branch?",
+              `This will permanently delete ${selectedBranchAction?.title || "this branch"}.`,
+              () => deleteSelectedBranch(),
+            )
+          }
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
@@ -11837,7 +11984,13 @@ export function LocationDetailPage() {
                         aria-label={`Remove ${memberName(accounts, member.member_id)}`}
                         color="error"
                         size="small"
-                        onClick={() => void removeSelectedFamilyMember(member)}
+                        onClick={() =>
+                          requestDeleteConfirmation(
+                            "Remove Family Member?",
+                            `This will remove ${memberName(accounts, member.member_id)} from this missional family.`,
+                            () => removeSelectedFamilyMember(member),
+                          )
+                        }
                         disabled={familyMemberSaving}
                       >
                         <DeleteIcon fontSize="small" />
@@ -12088,9 +12241,35 @@ export function LocationDetailPage() {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="Expense particular"
+                          label="Particular"
                           required
                           fullWidth
+                          slotProps={{
+                            ...params.slotProps,
+                            input: {
+                              ...params.slotProps.input,
+                              endAdornment: (
+                                <>
+                                  <InputAdornment position="end">
+                                    <Tooltip title="Add particular">
+                                      <IconButton
+                                        edge="end"
+                                        size="small"
+                                        aria-label="Add particular"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openExpenseParticularDrawer();
+                                        }}
+                                      >
+                                        <AddIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </InputAdornment>
+                                  {params.slotProps.input?.endAdornment}
+                                </>
+                              ),
+                            },
+                          }}
                         />
                       )}
                       fullWidth
@@ -12174,6 +12353,7 @@ export function LocationDetailPage() {
         members={members}
         ministryMembers={ministryMembers}
         cashbooks={cashbooks}
+        roles={roles}
         zones={zones}
         missionalFamilies={missionalFamilies}
         schedules={schedules}
@@ -12424,13 +12604,6 @@ export function LocationDetailPage() {
               {reportForm.type === "Attendance" ? (
                 <>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                    <TextField
-                      label="Report Title"
-                      value={reportForm.title}
-                      slotProps={{ input: { readOnly: true } }}
-                      fullWidth
-                      required
-                    />
                     <DatePicker
                       label="Schedule Date"
                       value={toPickerValue(reportForm.schedule_date)}
@@ -12443,7 +12616,14 @@ export function LocationDetailPage() {
                         )
                       }
                       slots={{ day: renderReportScheduleAwareDay }}
-                      slotProps={{ textField: { fullWidth: true } }}
+                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                    />
+                    <TextField
+                      label="Report Title"
+                      value={reportForm.title}
+                      slotProps={{ input: { readOnly: true } }}
+                      fullWidth
+                      required
                     />
                   </Stack>
                   <TextField
@@ -12513,13 +12693,6 @@ export function LocationDetailPage() {
               ) : (
                 <>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                    <TextField
-                      label="Report Title"
-                      value={reportForm.title}
-                      slotProps={{ input: { readOnly: true } }}
-                      fullWidth
-                      required
-                    />
                     <DatePicker
                       label="Schedule Date"
                       value={toPickerValue(reportForm.schedule_date)}
@@ -12528,8 +12701,15 @@ export function LocationDetailPage() {
                       shouldDisableDate={disableFinanceSchedulePickerDay}
                       slots={{ day: renderFinanceScheduleDateDay }}
                       slotProps={{
-                        textField: { fullWidth: true, required: true },
+                        textField: { fullWidth: true, required: true, size: "small" },
                       }}
+                    />
+                    <TextField
+                      label="Report Title"
+                      value={reportForm.title}
+                      slotProps={{ input: { readOnly: true } }}
+                      fullWidth
+                      required
                     />
                   </Stack>
                   <TextField
@@ -12921,6 +13101,15 @@ export function LocationDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDeleteDialog
+        open={Boolean(deleteConfirm)}
+        title={deleteConfirm?.title || "Delete Record?"}
+        description={deleteConfirm?.description || "This action cannot be undone."}
+        error={deleteConfirmError}
+        loading={deleteConfirmSaving}
+        onCancel={closeDeleteConfirmation}
+        onConfirm={() => void confirmPendingDelete()}
+      />
       <Drawer
         anchor="right"
         open={locationParticularsOpen}
@@ -12995,15 +13184,6 @@ export function LocationDetailPage() {
               ))}
             </TextField>
           </Box>
-          {editingLocationParticularId ? (
-            <Button
-              size="small"
-              onClick={resetLocationParticularForm}
-              sx={{ mb: 2 }}
-            >
-              Close Edit
-            </Button>
-          ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
@@ -13102,11 +13282,6 @@ export function LocationDetailPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          {editingRemissionId ? (
-            <Button onClick={resetRemissionForm} disabled={remissionSaving}>
-              Close Edit
-            </Button>
-          ) : null}
           <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
             <Button
               variant="outlined"
@@ -13268,6 +13443,7 @@ type LocationActionDrawerProps = {
   members: Member[];
   ministryMembers: Member[];
   cashbooks: Cashbook[];
+  roles: Role[];
   zones: Zone[];
   missionalFamilies: MissionalFamily[];
   schedules: Schedule[];
@@ -13289,7 +13465,6 @@ function accountOptionLabel(account: Account) {
   return (
     [account.fname, account.lname].filter(Boolean).join(" ") ||
     account.title ||
-    account.handle ||
     account.username ||
     account.email ||
     `Account #${account.id}`
@@ -14147,6 +14322,7 @@ function LocationActionDrawer({
   members,
   ministryMembers,
   cashbooks,
+  roles,
   zones,
   missionalFamilies,
   schedules,
@@ -14188,17 +14364,22 @@ function LocationActionDrawer({
       (cashbook) => cashbook.cashbook_id === form.opening_balance_cashbook_id,
     ) || null;
   const memberPersonOptions = ministryMemberAccounts;
-  const rolePersonOptions = [
-    "Location Pastor",
-    "Viewer",
-    ...additionalLocationRoles,
-  ].includes(form.role)
-    ? ministryMemberAccounts
-    : locationMemberAccounts;
+  const rolePersonOptions = ministryMemberAccounts;
   const selectedMemberPerson =
     memberPersonOptions.find((account) => account.id === form.user_id) || null;
   const selectedRolePerson =
     rolePersonOptions.find((account) => account.id === form.user_id) || null;
+  const selectedAssignableRole = (form.role || "").trim().toLowerCase();
+  const hasDuplicateLocationRole =
+    activeTab === 5 &&
+    Boolean(form.user_id && selectedAssignableRole) &&
+    roles.some(
+      (role) =>
+        role.user_id === form.user_id &&
+        !role.cashbook_id &&
+        (role.status || "Active").trim().toLowerCase() === "active" &&
+        (role.role || "").trim().toLowerCase() === selectedAssignableRole,
+    );
   const leaderOptions = locationMemberAccounts.filter(
     (account) => account.id !== form.leader2_id,
   );
@@ -14276,6 +14457,7 @@ function LocationActionDrawer({
   };
   const actionSaveDisabled =
     saving ||
+    hasDuplicateLocationRole ||
     (activeTab === 5 && (!form.user_id || !form.role)) ||
     (activeTab === 7 && !form.zone_id) ||
     (activeTab === 0 && !form.type) ||
@@ -14419,6 +14601,11 @@ function LocationActionDrawer({
                   </MenuItem>
                 ))}
               </TextField>
+            ) : null}
+            {hasDuplicateLocationRole ? (
+              <Alert severity="warning">
+                This person already has this role at this location.
+              </Alert>
             ) : null}
             {activeTab === 5 ? (
               <Stack spacing={1.25}>
@@ -15497,6 +15684,13 @@ export function CashbookDetailPage() {
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] =
     useState(false);
   const [transactionActionError, setTransactionActionError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [deleteConfirmSaving, setDeleteConfirmSaving] = useState(false);
+  const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [transactionEditForm, setTransactionEditForm] = useState({
     transaction_date: "",
     schedule_date: "",
@@ -15518,6 +15712,39 @@ export function CashbookDetailPage() {
   });
   const [scheduleCollectionValidation, setScheduleCollectionValidation] =
     useState<Record<string, string>>({});
+
+  const requestDeleteConfirmation = (
+    title: string,
+    description: string,
+    onConfirm: () => Promise<void> | void,
+  ) => {
+    setDeleteConfirm({ title, description, onConfirm });
+    setDeleteConfirmError("");
+  };
+
+  const closeDeleteConfirmation = () => {
+    if (deleteConfirmSaving) {
+      return;
+    }
+    setDeleteConfirm(null);
+    setDeleteConfirmError("");
+  };
+
+  const confirmPendingDelete = async () => {
+    if (!deleteConfirm) {
+      return;
+    }
+    setDeleteConfirmSaving(true);
+    setDeleteConfirmError("");
+    try {
+      await deleteConfirm.onConfirm();
+      setDeleteConfirm(null);
+    } catch (requestError) {
+      setDeleteConfirmError(getApiErrorMessage(requestError, "Failed to delete record"));
+    } finally {
+      setDeleteConfirmSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!cashbook?.location_id) {
@@ -17968,6 +18195,15 @@ export function CashbookDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDeleteDialog
+        open={Boolean(deleteConfirm)}
+        title={deleteConfirm?.title || "Delete Record?"}
+        description={deleteConfirm?.description || "This action cannot be undone."}
+        error={deleteConfirmError}
+        loading={deleteConfirmSaving}
+        onCancel={closeDeleteConfirmation}
+        onConfirm={() => void confirmPendingDelete()}
+      />
       <Dialog
         open={cashbookCloseConfirmOpen}
         onClose={() => setCashbookCloseConfirmOpen(false)}
@@ -18249,7 +18485,13 @@ export function CashbookDetailPage() {
                         <Button
                           color="error"
                           variant="outlined"
-                          onClick={() => removeCashbookRole(role)}
+                          onClick={() =>
+                            requestDeleteConfirmation(
+                              "Remove Cashbook Permission?",
+                              "This will remove this user's CashBook permission.",
+                              () => removeCashbookRole(role),
+                            )
+                          }
                         >
                           Remove
                         </Button>
@@ -18432,7 +18674,13 @@ export function CashbookDetailPage() {
                       size="small"
                       color="error"
                       aria-label={`Remove ${particular.title || "particular"}`}
-                      onClick={() => removeParticular(particular)}
+                      onClick={() =>
+                        requestDeleteConfirmation(
+                          "Delete Particular?",
+                          `This will permanently delete ${particular.title || "this particular"}.`,
+                          () => removeParticular(particular),
+                        )
+                      }
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>

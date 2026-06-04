@@ -81,7 +81,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const navigate = useNavigate();
   const rememberedLocationKey = `church-admin:last-location:${account.id}`;
   const visibleNavItems = navItems.filter((item) => item.label !== "Roles" || account.type === "Personal");
-  const accountFullName = [account.fname, account.lname].filter(Boolean).join(" ") || account.title || account.handle || account.username || "Account";
+  const accountFullName = [account.fname, account.lname].filter(Boolean).join(" ") || account.title || account.username || "Account";
   const currentPageTitle = (() => {
     if (/^\/app\/cashbooks\/[^/]+$/.test(location.pathname)) {
       return "CashBook";
@@ -511,7 +511,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
   const [form, setForm] = useState({
     fname: "",
     lname: "",
-    handle: "",
+    username: "",
     title: "",
     email: "",
     phone_number: "",
@@ -536,7 +536,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
     setForm({
       fname: account.fname || "",
       lname: account.lname || "",
-      handle: account.handle || account.username || "",
+      username: account.username || "",
       title: account.title || "",
       email: account.email || "",
       phone_number: account.phone_number || "",
@@ -636,7 +636,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
             </Stack>
           ) : null}
           <TextField label="Account Title" value={form.title} onChange={(event) => updateForm({ title: event.target.value })} fullWidth />
-          <TextField label="Handle" value={form.handle} onChange={(event) => updateForm({ handle: event.target.value })} fullWidth />
+          <TextField label="Username" value={form.username} onChange={(event) => updateForm({ username: event.target.value })} fullWidth />
           <EmailField label="Email" value={form.email} onValueChange={(value) => updateForm({ email: value })} fullWidth />
           <InternationalPhoneField label="Phone Number" country={form.country} value={form.phone_number} onValueChange={(value) => updateForm({ phone_number: value })} fullWidth />
           <TextField select label="Account Type" value={form.type} onChange={(event) => updateForm({ type: event.target.value, category: event.target.value === "Personal" ? "" : form.category || "Church" })} fullWidth>

@@ -63,14 +63,14 @@ function AuthForm({
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingPasswordAccount, setPendingPasswordAccount] = useState<Account | null>(null);
-  const [passwordForm, setPasswordForm] = useState({ handle: "", newPassword: "", confirmPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({ username: "", newPassword: "", confirmPassword: "" });
   const [accountType] = useState<"Personal" | "Organization">("Organization");
   const [form, setForm] = useState({
     identifier: "",
     password: "",
     fname: "",
     lname: "",
-    handle: "",
+    username: "",
     title: "",
     description: "",
     email: "",
@@ -99,7 +99,7 @@ function AuthForm({
           : {
               fname: accountType === "Personal" ? form.fname : "",
               lname: accountType === "Personal" ? form.lname : "",
-              handle: form.handle,
+              username: form.username,
               password: form.password,
               title: accountType === "Organization" ? form.title : `${form.fname} ${form.lname}`.trim(),
               description: accountType === "Organization" ? form.description : "",
@@ -121,7 +121,7 @@ function AuthForm({
         setSuccess("Account created successfully. Login to continue.");
         setForm((currentForm) => ({
           ...currentForm,
-          identifier: currentForm.email || currentForm.handle,
+          identifier: currentForm.email || currentForm.username,
           password: "",
         }));
         onModeChange("login");
@@ -142,7 +142,7 @@ function AuthForm({
         : undefined;
       setError(
         mode === "login" && status === 401
-          ? "We could not sign you in. Check your email, handle, phone number, and password, then try again."
+          ? "We could not sign you in. Check your email, username, phone number, and password, then try again."
           : getApiErrorMessage(requestError, "Authentication failed"),
       );
     } finally {
@@ -166,7 +166,7 @@ function AuthForm({
       const response = await api.post<{ account: Account }>("/auth/change-password", {
         account_id: pendingPasswordAccount.id,
         current_password: form.password,
-        handle: passwordForm.handle || undefined,
+        username: passwordForm.username || undefined,
         new_password: passwordForm.newPassword,
       });
       setSessionAccount(response.data.account);
@@ -188,7 +188,7 @@ function AuthForm({
             {mode === "login" ? "Login" : "Create account"}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {mode === "login" ? "Use email, handle, or phone number." : "Register a ministry organization."}
+            {mode === "login" ? "Use email, username, or phone number." : "Register a ministry organization."}
           </Typography>
           {error ? (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -202,7 +202,7 @@ function AuthForm({
           ) : null}
           {pendingPasswordAccount ? (
             <Stack component="form" spacing={2} sx={{ mt: 3 }} onSubmit={handlePasswordChange}>
-              <TextField label="Handle" value={passwordForm.handle} onChange={(event) => setPasswordForm((current) => ({ ...current, handle: event.target.value }))} required={!pendingPasswordAccount.handle && !pendingPasswordAccount.username} fullWidth />
+              <TextField label="Username" value={passwordForm.username} onChange={(event) => setPasswordForm((current) => ({ ...current, username: event.target.value }))} required={!pendingPasswordAccount.username} fullWidth />
               <PasswordField label="New Password" value={passwordForm.newPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))} required fullWidth />
               <PasswordField label="Confirm Password" value={passwordForm.confirmPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} required fullWidth />
               <Button type="submit" variant="contained" size="large" disabled={loading}>
@@ -245,7 +245,7 @@ function AuthForm({
                   </>
                 )}
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <TextField label="Handle" value={form.handle} onChange={(event) => setForm({ ...form, handle: event.target.value })} required fullWidth />
+                  <TextField label="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} required fullWidth />
                   <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth />
                 </Stack>
                 <EmailField label="Email" value={form.email} onValueChange={(value) => setForm({ ...form, email: value })} required fullWidth />
@@ -268,7 +268,7 @@ function AuthForm({
               </>
             ) : (
               <Stack spacing={2}>
-                <TextField label="Email, handle, or phone" value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} required fullWidth />
+                <TextField label="Email, username, or phone" value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} required fullWidth />
                 <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth />
               </Stack>
             )}

@@ -32,6 +32,7 @@ import {
 import Grid from "@mui/material/Grid";
 import { type FormEvent, useEffect, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
+import ConfirmDeleteDialog from "../components/ConfirmDeleteDialog";
 import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
 import { PageHeader } from "../components/PageHeader";
 import { ResourceCard } from "../components/ResourceCard";
@@ -332,17 +333,14 @@ export function HomePage({ account }: HomePageProps) {
           <Button variant="contained" onClick={() => void updateSelectedLocation(locationForm)}>Save</Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={locationDeleteOpen} onClose={() => setLocationDeleteOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Delete Location?</DialogTitle>
-        <DialogContent>
-          {locationError ? <Alert severity="error" sx={{ mb: 2 }}>{locationError}</Alert> : null}
-          <Typography variant="body2">This action permanently removes the selected location.</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLocationDeleteOpen(false)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={deleteSelectedLocation}>Delete</Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDeleteDialog
+        open={locationDeleteOpen}
+        title="Delete Location?"
+        description="This action permanently removes the selected location."
+        error={locationError}
+        onCancel={() => setLocationDeleteOpen(false)}
+        onConfirm={() => void deleteSelectedLocation()}
+      />
       <Drawer
         anchor="right"
         open={locationDrawerOpen}

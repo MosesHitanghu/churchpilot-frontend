@@ -49,6 +49,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
+import ConfirmDeleteDialog from "../components/ConfirmDeleteDialog";
 import Grid from "@mui/material/Grid";
 import { useTheme } from "@mui/material/styles";
 import { type ReactNode, useEffect, useState } from "react";
@@ -168,6 +169,9 @@ export function AdminDashboardPage() {
   const [replyByTicket, setReplyByTicket] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmError, setDeleteConfirmError] = useState("");
+  const [deleteConfirmSaving, setDeleteConfirmSaving] = useState(false);
 
   const loadBootstrap = () => {
     api.get<{ has_super_admin: boolean }>("/system-admins/bootstrap-status").then((response) => setHasSuperAdmin(response.data.has_super_admin)).catch(() => setHasSuperAdmin(true));
@@ -273,6 +277,22 @@ export function AdminDashboardPage() {
     setAccountAnchor(null);
     setActionAccount(null);
     loadDashboard();
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!admin || !actionAccount) {
+      return;
+    }
+    setDeleteConfirmSaving(true);
+    setDeleteConfirmError("");
+    try {
+      await accountAction("delete");
+      setDeleteConfirmOpen(false);
+    } catch (requestError) {
+      setDeleteConfirmError(getApiErrorMessage(requestError, "Failed to delete account"));
+    } finally {
+      setDeleteConfirmSaving(false);
+    }
   };
 
   const openAccountLocations = async (account: AdminAccountSummary) => {
@@ -620,8 +640,31 @@ export function AdminDashboardPage() {
         <MenuItem onClick={() => accountAction("approve")}><ListItemIcon><CheckCircleIcon fontSize="small" /></ListItemIcon>Approve</MenuItem>
         <MenuItem onClick={() => accountAction("reject")}><ListItemIcon><VerifiedIcon fontSize="small" /></ListItemIcon>Reject</MenuItem>
         <MenuItem onClick={() => accountAction("deactivate")}><ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>Deactivate</MenuItem>
-        <MenuItem onClick={() => accountAction("delete")}><ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>Delete</MenuItem>
+        <MenuItem
+          onClick={() => {
+            setAccountAnchor(null);
+            setDeleteConfirmError("");
+            setDeleteConfirmOpen(true);
+          }}
+        >
+          <ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>Delete
+        </MenuItem>
       </Menu>
+      <ConfirmDeleteDialog
+        open={deleteConfirmOpen}
+        title="Delete Account?"
+        description={`This will permanently delete ${actionAccount?.display_name || actionAccount?.title || "this account"}.`}
+        error={deleteConfirmError}
+        loading={deleteConfirmSaving}
+        onCancel={() => {
+          if (!deleteConfirmSaving) {
+            setDeleteConfirmOpen(false);
+            setDeleteConfirmError("");
+            setActionAccount(null);
+          }
+        }}
+        onConfirm={() => void confirmDeleteAccount()}
+      />
     </Box>
   );
 }
