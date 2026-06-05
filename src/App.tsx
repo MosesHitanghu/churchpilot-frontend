@@ -1,9 +1,9 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { LoadingState } from "./components/LoadingState";
 import type { Account } from "./lib/api";
-import { getSessionAccount } from "./lib/session";
+import { clearSessionAccount, getSessionAccount } from "./lib/session";
 import type { AppThemeMode } from "./theme";
 
 const AppShell = lazy(() => import("./layouts/AppShell").then((module) => ({ default: module.AppShell })));
@@ -28,6 +28,37 @@ function App({ themeMode, onToggleTheme }: AppProps) {
   const initialAccount = useMemo(() => getSessionAccount(), []);
   const [account, setAccount] = useState<Account | null>(initialAccount);
 
+  useEffect(() => {
+    if (!account) {
+      return undefined;
+    }
+
+    let timeoutId = window.setTimeout(() => {
+      clearSessionAccount();
+      setAccount(null);
+    }, 60 * 60 * 1000);
+
+    const resetTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        clearSessionAccount();
+        setAccount(null);
+      }, 60 * 60 * 1000);
+    };
+
+    const events = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+    events.forEach((eventName) =>
+      window.addEventListener(eventName, resetTimer, { passive: true }),
+    );
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      events.forEach((eventName) =>
+        window.removeEventListener(eventName, resetTimer),
+      );
+    };
+  }, [account]);
+
   return (
     <Suspense fallback={<LoadingState minHeight="100vh" />}>
       <Routes>
@@ -47,7 +78,7 @@ function App({ themeMode, onToggleTheme }: AppProps) {
               onAccountUpdated={setAccount}
             />
           ) : (
-            <Navigate to="/login" replace />
+            <Navigate to="/" replace />
           )
         }
       >

@@ -442,11 +442,18 @@ export type AccountOverview = {
     can_view_public_location_resources?: boolean;
     roles?: {
       account_admin?: string[];
+      location_creator?: string[];
       location_admin?: string[];
       evaluator?: string[];
       ministry_standard_user?: boolean;
       location_standard_user?: string[];
     };
+    location_creation_ministries?: Array<{
+      owner_id: string;
+      location_id?: string | null;
+      title?: string | null;
+      type?: string | null;
+    }>;
     ministry?: ResourceActions;
     location?: ResourceActions;
     individual?: {

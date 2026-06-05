@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Drawer,
   IconButton,
   MenuItem,
@@ -18,9 +19,6 @@ import { useNavigate } from "react-router-dom";
 import { EmailField, GeoFields, InternationalPhoneField, PasswordField } from "../components/FormFields";
 import { api, getApiErrorMessage, type Account } from "../lib/api";
 import { setSessionAccount } from "../lib/session";
-
-const organizationCategories = ["Church", "Ministry", "Mission Group"];
-const denominations = ["Pentacostal", "Angalican", "Catholic", "Methodist", "SDA"];
 
 function collectDeviceInfo() {
   const userAgent = window.navigator.userAgent;
@@ -68,6 +66,7 @@ function AuthForm({
   const [form, setForm] = useState({
     identifier: "",
     password: "",
+    confirmPassword: "",
     fname: "",
     lname: "",
     username: "",
@@ -78,7 +77,7 @@ function AuthForm({
     marital_status: "",
     phone_number: "",
     type: "Organization",
-    category: "Church",
+    category: "Ministry",
     denomination: "",
     country: "",
     district: "",
@@ -91,6 +90,10 @@ function AuthForm({
     event.preventDefault();
     setError("");
     setSuccess("");
+    if (mode === "signup" && form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
     setLoading(true);
     try {
       const payload =
@@ -102,14 +105,14 @@ function AuthForm({
               username: form.username,
               password: form.password,
               title: accountType === "Organization" ? form.title : `${form.fname} ${form.lname}`.trim(),
-              description: accountType === "Organization" ? form.description : "",
+              description: "",
               email: form.email,
               gender: accountType === "Personal" ? form.gender : "",
               marital_status: accountType === "Personal" ? form.marital_status : "",
               phone_number: form.phone_number,
               type: accountType,
-              category: accountType === "Organization" ? form.category : null,
-              denomination: form.denomination,
+              category: accountType === "Organization" ? "Ministry" : null,
+              denomination: "",
               country: form.country,
               district: form.district,
               city: accountType === "Personal" ? form.city : "",
@@ -204,9 +207,16 @@ function AuthForm({
             <Stack component="form" spacing={2} sx={{ mt: 3 }} onSubmit={handlePasswordChange}>
               <TextField label="Username" value={passwordForm.username} onChange={(event) => setPasswordForm((current) => ({ ...current, username: event.target.value }))} required={!pendingPasswordAccount.username} fullWidth />
               <PasswordField label="New Password" value={passwordForm.newPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))} required fullWidth />
-              <PasswordField label="Confirm Password" value={passwordForm.confirmPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} required fullWidth />
+              <PasswordField label="Confirm Password" value={passwordForm.confirmPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
               <Button type="submit" variant="contained" size="large" disabled={loading}>
-                Continue
+                {loading ? (
+                  <>
+                    <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                    Saving...
+                  </>
+                ) : (
+                  "Continue"
+                )}
               </Button>
             </Stack>
           ) : (
@@ -236,26 +246,13 @@ function AuthForm({
                 ) : (
                   <>
                     <TextField label="Organization Name" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required fullWidth />
-                    <TextField select label="Organization Category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} required fullWidth>
-                      {organizationCategories.map((option) => (
-                        <MenuItem key={option} value={option}>{option}</MenuItem>
-                      ))}
-                    </TextField>
-                    <TextField label="Organization Details" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} multiline minRows={3} fullWidth />
                   </>
                 )}
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                   <TextField label="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} required fullWidth />
-                  <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth />
+                  <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
                 </Stack>
-                <EmailField label="Email" value={form.email} onValueChange={(value) => setForm({ ...form, email: value })} required fullWidth />
-                <InternationalPhoneField label="Phone Number" country={form.country} value={form.phone_number} onValueChange={(value) => setForm({ ...form, phone_number: value })} required fullWidth />
-                <TextField select label="Denomination" value={form.denomination} onChange={(event) => setForm({ ...form, denomination: event.target.value })} required fullWidth>
-                  <MenuItem value="" disabled>Select denomination</MenuItem>
-                  {denominations.map((option) => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </TextField>
+                <PasswordField label="Confirm Password" value={form.confirmPassword} onValueChange={(value) => setForm({ ...form, confirmPassword: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
                 <GeoFields
                   country={form.country}
                   district={form.district}
@@ -265,15 +262,26 @@ function AuthForm({
                   onChange={(value) => setForm({ ...form, ...value })}
                 />
                 <TextField label="Address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} required={accountType === "Organization"} fullWidth />
+                <EmailField label="Email" value={form.email} onValueChange={(value) => setForm({ ...form, email: value })} required fullWidth />
+                <InternationalPhoneField label="Phone Number" country={form.country} value={form.phone_number} onValueChange={(value) => setForm({ ...form, phone_number: value })} required fullWidth />
               </>
             ) : (
               <Stack spacing={2}>
                 <TextField label="Email, username, or phone" value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} required fullWidth />
-                <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth />
+                <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "current-password" } }} />
               </Stack>
             )}
             <Button type="submit" variant="contained" size="large" disabled={loading} startIcon={mode === "login" ? <LoginIcon /> : <PersonAddIcon />}>
-              {mode === "login" ? "Login" : "Create Account"}
+              {loading ? (
+                <>
+                  <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                  {mode === "login" ? "Logging in..." : "Saving..."}
+                </>
+              ) : mode === "login" ? (
+                "Login"
+              ) : (
+                "Create Account"
+              )}
             </Button>
             <Button type="button" onClick={() => onModeChange(mode === "login" ? "signup" : "login")}>
               {mode === "login" ? "Create a new account" : "Already have an account"}

@@ -191,7 +191,7 @@ export function GeoFields({ country, district, city, showCity = true, required =
           onChange({ country, district: nextValue, city: "" });
         }}
         getOptionLabel={(option) => (typeof option === "string" ? option : option.label)}
-        renderInput={(params) => <TextField {...params} label="District" required={required} fullWidth />}
+        renderInput={(params) => <TextField {...params} label="Region" required={required} fullWidth />}
         fullWidth
       />
       {showCity ? <CityField country={country} district={district} city={city} onChange={onChange} /> : null}

@@ -9,6 +9,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -55,6 +56,7 @@ export function HomePage({ account }: HomePageProps) {
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [locationForm, setLocationForm] = useState({
+    owner_id: "",
     title: "",
     type: "Branch",
     description: "",
@@ -104,16 +106,21 @@ export function HomePage({ account }: HomePageProps) {
   const handleCreateLocation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLocationError("");
+    if (account.type !== "Organization" && !locationForm.owner_id) {
+      setLocationError("Select the ministry you are creating this location for.");
+      return;
+    }
     setSavingLocation(true);
     try {
       await api.post<Location>("/locations", {
         ...locationForm,
         author_id: account.id,
-        owner_id: account.id,
+        owner_id: account.type === "Organization" ? account.id : locationForm.owner_id,
       });
       await refreshOverview();
       setLocationDrawerOpen(false);
       setLocationForm({
+        owner_id: "",
         title: "",
         type: "Branch",
         description: "",
@@ -138,6 +145,7 @@ export function HomePage({ account }: HomePageProps) {
       return;
     }
     setLocationForm({
+      owner_id: selectedLocation.owner_id || "",
       title: selectedLocation.title || "",
       type: selectedLocation.type || "Branch",
       description: selectedLocation.description || "",
@@ -208,7 +216,14 @@ export function HomePage({ account }: HomePageProps) {
       location.country,
     ].filter(Boolean).join(" ").toLowerCase().includes(locationSearch.trim().toLowerCase())
   ));
-  const canCreateLocations = overview.permissions?.can_create_locations !== false;
+  const locationCreationMinistries =
+    overview.permissions?.location_creation_ministries || [];
+  const canCreateLocations =
+    overview.permissions?.can_create_locations === true &&
+    (account.type === "Organization" || locationCreationMinistries.length > 0);
+  const selectedCreationMinistry =
+    locationCreationMinistries.find((item) => item.owner_id === locationForm.owner_id) ||
+    null;
 
   return (
     <>
@@ -232,14 +247,25 @@ export function HomePage({ account }: HomePageProps) {
                 label={`Assigned Locations (${overview.assigned.locations.length})`}
               />
             </Tabs>
-            <Button
-              variant="contained"
-              startIcon={<AddLocationAltIcon />}
-              disabled={!canCreateLocations}
-              onClick={() => setLocationDrawerOpen(true)}
-            >
-              Add Location
-            </Button>
+            {canCreateLocations ? (
+              <Button
+                variant="contained"
+                startIcon={<AddLocationAltIcon />}
+                onClick={() => {
+                  if (
+                    account.type !== "Organization" &&
+                    locationCreationMinistries.length === 1
+                  ) {
+                    updateLocationForm({
+                      owner_id: locationCreationMinistries[0].owner_id,
+                    });
+                  }
+                  setLocationDrawerOpen(true);
+                }}
+              >
+                Add Location
+              </Button>
+            ) : null}
           </Stack>
           <TextField
             label="Search locations"
@@ -330,7 +356,15 @@ export function HomePage({ account }: HomePageProps) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLocationEditOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={() => void updateSelectedLocation(locationForm)}>Save</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const { owner_id: _ownerId, ...payload } = locationForm;
+              void updateSelectedLocation(payload);
+            }}
+          >
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
       <ConfirmDeleteDialog
@@ -373,6 +407,28 @@ export function HomePage({ account }: HomePageProps) {
             </Alert>
           ) : null}
           <Stack spacing={2} sx={{ mt: 3 }}>
+            {account.type !== "Organization" ? (
+              <Autocomplete
+                options={locationCreationMinistries}
+                value={selectedCreationMinistry}
+                onChange={(_, value) =>
+                  updateLocationForm({ owner_id: value?.owner_id || "" })
+                }
+                getOptionLabel={(option) => option.title || "Ministry"}
+                isOptionEqualToValue={(option, value) =>
+                  option.owner_id === value.owner_id
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Ministry"
+                    required
+                    fullWidth
+                  />
+                )}
+                fullWidth
+              />
+            ) : null}
             <TextField
               label="Location Name"
               value={locationForm.title}

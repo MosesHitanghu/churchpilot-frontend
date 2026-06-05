@@ -43,35 +43,38 @@ export const createAppTheme = (mode: AppThemeMode) =>
   components: {
     MuiTextField: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiSelect: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiAutocomplete: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiFormControl: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiInputBase: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiOutlinedInput: {
       defaultProps: {
-        size: "small",
+        size: "medium",
       },
     },
     MuiButton: {
+      defaultProps: {
+        size: "medium",
+      },
       styleOverrides: {
         root: {
           textTransform: "none",

@@ -18,17 +18,54 @@ export function SiteFooter({ contained = true }: SiteFooterProps) {
         justifyContent: "space-between",
       }}
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: "center", flexWrap: "wrap" }}
+      >
         <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.76)" }}>
-          © {currentYear} GoodTech Solutions
+          © {currentYear} JELMOH
         </Typography>
-        <IconButton size="small" aria-label="Facebook" href="#" target="_blank" rel="noreferrer" sx={{ color: "common.white", border: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <IconButton
+          size="small"
+          aria-label="Facebook"
+          href="#"
+          target="_blank"
+          rel="noreferrer"
+          sx={{
+            color: "common.white",
+            border: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <FacebookIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" aria-label="X" href="#" target="_blank" rel="noreferrer" sx={{ color: "common.white", border: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <IconButton
+          size="small"
+          aria-label="X"
+          href="#"
+          target="_blank"
+          rel="noreferrer"
+          sx={{
+            color: "common.white",
+            border: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <XIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" aria-label="LinkedIn" href="#" target="_blank" rel="noreferrer" sx={{ color: "common.white", border: 1, borderColor: "rgba(255,255,255,0.2)" }}>
+        <IconButton
+          size="small"
+          aria-label="LinkedIn"
+          href="#"
+          target="_blank"
+          rel="noreferrer"
+          sx={{
+            color: "common.white",
+            border: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <LinkedInIcon fontSize="small" />
         </IconButton>
       </Stack>
@@ -46,7 +83,11 @@ export function SiteFooter({ contained = true }: SiteFooterProps) {
         py: 3,
       }}
     >
-      {contained ? <Container maxWidth="lg">{content}</Container> : <Box sx={{ px: 2 }}>{content}</Box>}
+      {contained ? (
+        <Container maxWidth="lg">{content}</Container>
+      ) : (
+        <Box sx={{ px: 2 }}>{content}</Box>
+      )}
     </Box>
   );
 }

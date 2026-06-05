@@ -17,6 +17,7 @@ import {
   Badge,
   Box,
   Button,
+  CircularProgress,
   CssBaseline,
   Divider,
   Drawer,
@@ -48,8 +49,6 @@ import type { AppThemeMode } from "../theme";
 const drawerWidth = 238;
 const closedWidth = 68;
 const accountTypes = ["Personal", "Organization"];
-const organizationCategories = ["Church", "Ministry", "Mission Group"];
-const denominations = ["Pentacostal", "Angalican", "Catholic", "Methodist", "SDA"];
 
 type AppShellProps = {
   account: Account;
@@ -501,6 +500,8 @@ type ProfileDrawerProps = {
 };
 
 function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDrawerProps) {
+  const muiTheme = useTheme();
+  const isDesktop = useMediaQuery(muiTheme.breakpoints.up("md"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -542,7 +543,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
       phone_number: account.phone_number || "",
       type: account.type || "",
       category: account.category || "",
-      denomination: denominations.includes(account.denomination || "") ? account.denomination || "" : "",
+      denomination: "",
       gender: account.gender || "",
       marital_status: account.marital_status || "",
       occupation: account.occupation || "",
@@ -576,7 +577,10 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
     setSuccess("");
     setSaving(true);
     try {
-      const payload = form.type === "Organization" ? { ...form, fname: "", lname: "" } : form;
+      const payload =
+        form.type === "Organization"
+          ? { ...form, fname: "", lname: "", category: "Ministry", description: "", denomination: "" }
+          : form;
       const response = await api.patch<Account>(`/accounts/${account.id}`, payload);
       setSessionAccount(response.data);
       onAccountUpdated(response.data);
@@ -637,23 +641,12 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
           ) : null}
           <TextField label="Account Title" value={form.title} onChange={(event) => updateForm({ title: event.target.value })} fullWidth />
           <TextField label="Username" value={form.username} onChange={(event) => updateForm({ username: event.target.value })} fullWidth />
-          <EmailField label="Email" value={form.email} onValueChange={(value) => updateForm({ email: value })} fullWidth />
-          <InternationalPhoneField label="Phone Number" country={form.country} value={form.phone_number} onValueChange={(value) => updateForm({ phone_number: value })} fullWidth />
-          <TextField select label="Account Type" value={form.type} onChange={(event) => updateForm({ type: event.target.value, category: event.target.value === "Personal" ? "" : form.category || "Church" })} fullWidth>
+          <TextField select label="Account Type" value={form.type} onChange={(event) => updateForm({ type: event.target.value, category: event.target.value === "Personal" ? "" : "Ministry" })} fullWidth>
             {accountTypes.map((option) => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
             ))}
           </TextField>
-          {form.type === "Organization" ? (
-            <>
-              <TextField select label="Organization Category" value={form.category} onChange={(event) => updateForm({ category: event.target.value })} fullWidth>
-                {organizationCategories.map((option) => (
-                  <MenuItem key={option} value={option}>{option}</MenuItem>
-                ))}
-              </TextField>
-              <TextField label="Organization Details" value={form.description} onChange={(event) => updateForm({ description: event.target.value })} multiline minRows={3} fullWidth />
-            </>
-          ) : (
+          {form.type !== "Organization" ? (
             <>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                 <TextField select label="Gender" value={form.gender} onChange={(event) => updateForm({ gender: event.target.value })} fullWidth>
@@ -669,13 +662,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
               </Stack>
               <TextField label="Occupation" value={form.occupation} onChange={(event) => updateForm({ occupation: event.target.value })} fullWidth />
             </>
-          )}
-          <TextField select label="Denomination" value={form.denomination} onChange={(event) => updateForm({ denomination: event.target.value })} fullWidth>
-            <MenuItem value="">Select denomination</MenuItem>
-            {denominations.map((option) => (
-              <MenuItem key={option} value={option}>{option}</MenuItem>
-            ))}
-          </TextField>
+          ) : null}
           <GeoFields
             country={form.country}
             district={form.district}
@@ -692,8 +679,17 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
             />
             <TextField label="Address" value={form.address} onChange={(event) => updateForm({ address: event.target.value })} fullWidth />
           </Stack>
+          <EmailField label="Email" value={form.email} onValueChange={(value) => updateForm({ email: value })} fullWidth />
+          <InternationalPhoneField label="Phone Number" country={form.country} value={form.phone_number} onValueChange={(value) => updateForm({ phone_number: value })} fullWidth />
           <Button type="submit" variant="contained" disabled={saving}>
-            Save Profile
+            {saving ? (
+              <>
+                <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                Saving...
+              </>
+            ) : (
+              "Save Profile"
+            )}
           </Button>
         </Stack>
       </Box>
@@ -702,7 +698,7 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
         open={Boolean(notification)}
         autoHideDuration={4000}
         onClose={() => setNotification(null)}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        anchorOrigin={{ vertical: "top", horizontal: isDesktop ? "right" : "center" }}
         sx={{ zIndex: (muiTheme) => muiTheme.zIndex.modal + 3 }}
       >
         {notification ? (

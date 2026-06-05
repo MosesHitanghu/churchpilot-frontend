@@ -81,8 +81,10 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import { useTheme } from "@mui/material/styles";
 import {
   DataGrid,
   type GridColDef,
@@ -191,11 +193,13 @@ const familyScopedRoles = [
   "Assistant Sheperd",
 ];
 const additionalLocationRoles = ["Reports Approver", "Requisitions Approver"];
+const hqOnlyLocationRoles = ["Location Creator"];
 const assignableLocationRoles = [
   "Location Pastor",
   "Location Admin",
   "Viewer",
   ...additionalLocationRoles,
+  ...hqOnlyLocationRoles,
 ];
 
 const blankActionForm = {
@@ -378,7 +382,15 @@ const weekdays = [
   "Friday",
   "Saturday",
 ];
-const roleTitles = ["Apostle", "Bishop", "Pastor", "Shepherd", "Mama", "Papa"];
+const roleTitles = [
+  "Apostle",
+  "Bishop",
+  "Pastor",
+  "Shepherd",
+  "Mama",
+  "Papa",
+  "Location Creator",
+];
 const roleMenuScopes = [
   "Posts",
   "Members",
@@ -2078,6 +2090,8 @@ function ScheduleCalendar({
 }
 
 export function LocationDetailPage() {
+  const muiTheme = useTheme();
+  const isDesktop = useMediaQuery(muiTheme.breakpoints.up("md"));
   const { locationId } = useParams();
   const {
     data: location,
@@ -2328,6 +2342,7 @@ export function LocationDetailPage() {
   const [locationError, setLocationError] = useState("");
   const [locationSuccess, setLocationSuccess] = useState("");
   const [locationForm, setLocationForm] = useState({
+    owner_id: "",
     title: "",
     type: "Branch",
     description: "",
@@ -2485,6 +2500,7 @@ export function LocationDetailPage() {
 
   const resetLocationForm = () => {
     setLocationForm({
+      owner_id: "",
       title: "",
       type: "Branch",
       description: "",
@@ -2512,8 +2528,27 @@ export function LocationDetailPage() {
     : "";
   const activeLocationIdRef = useRef(locationId);
   activeLocationIdRef.current = locationId;
+  const loadedRelatedGroupsRef = useRef<Set<string>>(new Set());
+  const pendingRelatedGroupsRef = useRef<Set<string>>(new Set());
+  const relatedRecordGroups = [
+    "base",
+    "posts",
+    "membership",
+    "finances",
+    "attendance",
+    "events",
+    "roles",
+    "schedules",
+    "branches",
+    "reports",
+    "subscriptions",
+  ];
+  const expandRelatedGroups = (groups: string[] = ["all"]) =>
+    groups.includes("all") ? relatedRecordGroups : groups;
 
   useEffect(() => {
+    loadedRelatedGroupsRef.current.clear();
+    pendingRelatedGroupsRef.current.clear();
     setLocationChooserOpen(false);
     setRelatedError("");
     setRelatedLoading(false);
@@ -2560,11 +2595,15 @@ export function LocationDetailPage() {
       };
     const safeGet = <T,>(url: string, fallback: T) =>
       api.get<T>(url).catch(() => ({ data: fallback }));
+    const requestedGroups = expandRelatedGroups(groups);
     const wants = (group: string) =>
       groups.includes("all") || groups.includes(group);
     const jobs: Promise<unknown>[] = [];
     setRelatedError("");
     setRelatedLoading(true);
+    requestedGroups.forEach((group) =>
+      pendingRelatedGroupsRef.current.add(group),
+    );
     if (wants("posts")) {
       jobs.push(
         safeGet<Post[]>(`/posts?location_id=${requestLocationId}`, []).then(
@@ -2766,7 +2805,13 @@ export function LocationDetailPage() {
       );
     }
     return Promise.all(jobs)
-      .then(() => undefined)
+      .then(() => {
+        if (canApplyRelatedLoad()) {
+          requestedGroups.forEach((group) =>
+            loadedRelatedGroupsRef.current.add(group),
+          );
+        }
+      })
       .catch((requestError) => {
         if (canApplyRelatedLoad()) {
           setRelatedError(
@@ -2775,14 +2820,29 @@ export function LocationDetailPage() {
         }
       })
       .finally(() => {
+        requestedGroups.forEach((group) =>
+          pendingRelatedGroupsRef.current.delete(group),
+        );
         if (canApplyRelatedLoad()) {
-          setRelatedLoading(false);
+          setRelatedLoading(pendingRelatedGroupsRef.current.size > 0);
         }
       });
   };
 
+  const loadRelatedRecordsOnce = (groups: string[] = ["all"]) => {
+    const pendingGroups = expandRelatedGroups(groups).filter(
+      (group) =>
+        !loadedRelatedGroupsRef.current.has(group) &&
+        !pendingRelatedGroupsRef.current.has(group),
+    );
+    if (!pendingGroups.length) {
+      return Promise.resolve();
+    }
+    return loadRelatedRecords(pendingGroups);
+  };
+
   useEffect(() => {
-    loadRelatedRecords(["base", "reports"]);
+    void loadRelatedRecordsOnce(["base", "reports"]);
   }, [locationId, location?.owner_id]);
 
   useEffect(() => {
@@ -2790,25 +2850,25 @@ export function LocationDetailPage() {
       return;
     }
     if (activeTab === 0) {
-      void loadRelatedRecords(["posts"]);
+      void loadRelatedRecordsOnce(["posts"]);
     } else if (activeTab === 1) {
-      void loadRelatedRecords(["membership"]);
+      void loadRelatedRecordsOnce(["membership"]);
     } else if (activeTab === 2) {
-      void loadRelatedRecords(["finances"]);
+      void loadRelatedRecordsOnce(["finances"]);
     } else if (activeTab === 3) {
-      void loadRelatedRecords(["attendance"]);
+      void loadRelatedRecordsOnce(["attendance"]);
     } else if (activeTab === 4) {
-      void loadRelatedRecords(["events"]);
+      void loadRelatedRecordsOnce(["events"]);
     } else if (activeTab === 5) {
-      void loadRelatedRecords(["roles"]);
+      void loadRelatedRecordsOnce(["roles"]);
     } else if (activeTab === 8) {
-      void loadRelatedRecords(["schedules", "attendance"]);
+      void loadRelatedRecordsOnce(["schedules", "attendance"]);
     } else if (activeTab === 9) {
-      void loadRelatedRecords(["branches"]);
+      void loadRelatedRecordsOnce(["branches"]);
     } else if (activeTab === 10) {
-      void loadRelatedRecords(["reports"]);
+      void loadRelatedRecordsOnce(["reports"]);
     } else if (activeTab === 12) {
-      void loadRelatedRecords(["subscriptions"]);
+      void loadRelatedRecordsOnce(["subscriptions"]);
     }
   }, [activeTab, attendanceSubTab, financeView, locationId, membershipView]);
 
@@ -2906,12 +2966,16 @@ export function LocationDetailPage() {
     }
     setLocationError("");
     setLocationSuccess("");
+    if (account.type !== "Organization" && !locationForm.owner_id) {
+      setLocationError("Select the ministry you are creating this location for.");
+      return;
+    }
     setSavingLocation(true);
     try {
       const response = await api.post<Location>("/locations", {
         ...locationForm,
         author_id: account.id,
-        owner_id: account.id,
+        owner_id: account.type === "Organization" ? account.id : locationForm.owner_id,
       });
       await refreshOverview();
       resetLocationForm();
@@ -5372,6 +5436,7 @@ export function LocationDetailPage() {
   const hasZoneScopedRole = hasActiveRole(zoneScopedRoles);
   const hasFamilyScopedRole = hasActiveRole(familyScopedRoles);
   const hasScopedLeadershipRole = hasZoneScopedRole || hasFamilyScopedRole;
+  const canOpenManageTab = isLocationManagerForUi;
   const canApproveReportsForUi =
     isLocationOwner ||
     locationPastorRoles.includes(activeLocationRole) ||
@@ -5386,6 +5451,9 @@ export function LocationDetailPage() {
     String(location?.type || "").toLowerCase() === "branch";
   const isOfficeLocation =
     String(location?.type || "").toLowerCase() === "office";
+  const availableAssignableLocationRoles = assignableLocationRoles.filter(
+    (role) => !hqOnlyLocationRoles.includes(role) || Boolean(location?.is_hq),
+  );
   const canUseLocalReports = isBranchLocation;
   const canUseAllMinistryReports =
     !isBranchLocation || Boolean(location?.is_hq);
@@ -5411,11 +5479,11 @@ export function LocationDetailPage() {
   useEffect(() => {
     if (
       !visibleLocationTabs.includes(activeTab) &&
-      !manageLocationContentTabs.includes(activeTab)
+      !(canOpenManageTab && manageLocationContentTabs.includes(activeTab))
     ) {
       setActiveTab(visibleLocationTabs[0] ?? -1);
     }
-  }, [activeTab, visibleLocationTabs]);
+  }, [activeTab, canOpenManageTab, visibleLocationTabs]);
   useEffect(() => {
     const root = locationTabsRef.current;
     const scroller = root?.querySelector<HTMLElement>(".MuiTabs-scroller");
@@ -5927,8 +5995,14 @@ export function LocationDetailPage() {
         sensitivity: "base",
       });
     });
+  const locationCreationMinistries =
+    overview?.permissions?.location_creation_ministries || [];
   const canCreateLocations =
-    overview?.permissions?.can_create_locations !== false;
+    overview?.permissions?.can_create_locations === true &&
+    (account?.type === "Organization" || locationCreationMinistries.length > 0);
+  const selectedCreationMinistry =
+    locationCreationMinistries.find((item) => item.owner_id === locationForm.owner_id) ||
+    null;
   const locationsCard = (
     <Paper variant="outlined" sx={{ overflow: "hidden" }}>
       <Box
@@ -5944,30 +6018,35 @@ export function LocationDetailPage() {
         <Typography variant="h6" sx={{ fontWeight: 900 }}>
           Locations
         </Typography>
-        <IconButton
-          color="primary"
-          size="small"
-          aria-label="Create New Location"
-          disabled={!canCreateLocations}
-          onClick={() => {
-            setLocationError("");
-            resetLocationForm();
-            setLocationDrawerOpen(true);
-          }}
-          sx={{
-            bgcolor: "primary.main",
-            color: "primary.contrastText",
-            height: 32,
-            width: 32,
-            "&:hover": { bgcolor: "primary.dark" },
-            "&.Mui-disabled": {
-              bgcolor: "action.disabledBackground",
-              color: "action.disabled",
-            },
-          }}
-        >
-          <AddIcon fontSize="small" />
-        </IconButton>
+        {canCreateLocations ? (
+          <IconButton
+            color="primary"
+            size="small"
+            aria-label="Create New Location"
+            onClick={() => {
+              setLocationError("");
+              resetLocationForm();
+              if (
+                account?.type !== "Organization" &&
+                locationCreationMinistries.length === 1
+              ) {
+                updateLocationForm({
+                  owner_id: locationCreationMinistries[0].owner_id,
+                });
+              }
+              setLocationDrawerOpen(true);
+            }}
+            sx={{
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+              height: 32,
+              width: 32,
+              "&:hover": { bgcolor: "primary.dark" },
+            }}
+          >
+            <AddIcon fontSize="small" />
+          </IconButton>
+        ) : null}
       </Box>
       <Box sx={{ px: 2.5, py: 1.5, borderTop: 1, borderColor: "divider" }}>
         <TextField
@@ -6067,6 +6146,23 @@ export function LocationDetailPage() {
           </Alert>
         ) : null}
         <Stack spacing={2} sx={{ mt: 3 }}>
+          {account?.type !== "Organization" ? (
+            <Autocomplete
+              options={locationCreationMinistries}
+              value={selectedCreationMinistry}
+              onChange={(_, value) =>
+                updateLocationForm({ owner_id: value?.owner_id || "" })
+              }
+              getOptionLabel={(option) => option.title || "Ministry"}
+              isOptionEqualToValue={(option, value) =>
+                option.owner_id === value.owner_id
+              }
+              renderInput={(params) => (
+                <TextField {...params} label="Ministry" required fullWidth />
+              )}
+              fullWidth
+            />
+          ) : null}
           <TextField
             label="Location Name"
             value={locationForm.title}
@@ -6156,7 +6252,10 @@ export function LocationDetailPage() {
               fullWidth
             >
               {savingLocation ? (
-                <CircularProgress size={18} color="inherit" />
+                <>
+                  <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                  Saving...
+                </>
               ) : (
                 "Save"
               )}
@@ -7769,18 +7868,20 @@ export function LocationDetailPage() {
           list: { role: "menubar", "aria-labelledby": "location-tab-13" },
         }}
       >
-        <MenuItem
-          onClick={() => {
-            setRoleMenuAnchor(null);
-            setRoleSwitchMenuAnchor(null);
-            setActiveTab(14);
-          }}
-        >
-          <ListItemIcon>
-            <ArticleIcon fontSize="small" />
-          </ListItemIcon>
-          About
-        </MenuItem>
+        {canOpenManageTab ? (
+          <MenuItem
+            onClick={() => {
+              setRoleMenuAnchor(null);
+              setRoleSwitchMenuAnchor(null);
+              setActiveTab(14);
+            }}
+          >
+            <ListItemIcon>
+              <ArticleIcon fontSize="small" />
+            </ListItemIcon>
+            About
+          </MenuItem>
+        ) : null}
         {canEditLocation && location.is_hq ? (
           <MenuItem
             onClick={() => void updateLocationHq(false)}
@@ -7802,19 +7903,23 @@ export function LocationDetailPage() {
             Set as HQ
           </MenuItem>
         ) : null}
-        <MenuItem onClick={openLocationParticulars}>
-          <ListItemIcon>
-            <CollectionsBookmarkIcon fontSize="small" />
-          </ListItemIcon>
-          Particulars
-        </MenuItem>
-        <MenuItem onClick={openLocationRemissions}>
-          <ListItemIcon>
-            <PaidIcon fontSize="small" />
-          </ListItemIcon>
-          Remissions
-        </MenuItem>
-        {visibleLocationTabs.includes(5) ? (
+        {canOpenManageTab ? (
+          <MenuItem onClick={openLocationParticulars}>
+            <ListItemIcon>
+              <CollectionsBookmarkIcon fontSize="small" />
+            </ListItemIcon>
+            Particulars
+          </MenuItem>
+        ) : null}
+        {canOpenManageTab ? (
+          <MenuItem onClick={openLocationRemissions}>
+            <ListItemIcon>
+              <PaidIcon fontSize="small" />
+            </ListItemIcon>
+            Remissions
+          </MenuItem>
+        ) : null}
+        {canOpenManageTab && visibleLocationTabs.includes(5) ? (
           <MenuItem
             onClick={() => {
               setActiveTab(5);
@@ -8074,31 +8179,33 @@ export function LocationDetailPage() {
                     label="Subscriptions"
                   />
                 ) : null}
-                <Tab
-                  value={13}
-                  id="location-tab-13"
-                  icon={<SettingsIcon />}
-                  iconPosition="start"
-                  label={
-                    <Box
-                      component="span"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setRoleMenuAnchor(event.currentTarget);
-                      }}
-                      sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 0.4,
-                      }}
-                    >
-                      Manage
-                      <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
-                    </Box>
-                  }
-                  onClick={(event) => setRoleMenuAnchor(event.currentTarget)}
-                  disabled={activeRoleSaving}
-                />
+                {canOpenManageTab ? (
+                  <Tab
+                    value={13}
+                    id="location-tab-13"
+                    icon={<SettingsIcon />}
+                    iconPosition="start"
+                    label={
+                      <Box
+                        component="span"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setRoleMenuAnchor(event.currentTarget);
+                        }}
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.4,
+                        }}
+                      >
+                        Manage
+                        <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
+                      </Box>
+                    }
+                    onClick={(event) => setRoleMenuAnchor(event.currentTarget)}
+                    disabled={activeRoleSaving}
+                  />
+                ) : null}
               </Tabs>
               {hiddenLocationTabCounts.left > 0 ? (
                 <Chip
@@ -9927,7 +10034,7 @@ export function LocationDetailPage() {
                                         fontSize="small"
                                       />
                                     ),
-                                    label: "District",
+                                    label: "Region",
                                     value: branch.district || "Not set",
                                   },
                                   {
@@ -11886,7 +11993,7 @@ export function LocationDetailPage() {
               ],
               ["Occupation", selectedMemberAccount?.occupation || "Not set"],
               ["Country", selectedMemberAccount?.country || "Not set"],
-              ["District", selectedMemberAccount?.district || "Not set"],
+              ["Region", selectedMemberAccount?.district || "Not set"],
               ["City", selectedMemberAccount?.city || "Not set"],
             ].map(([label, value]) => (
               <MemberInfoRow key={label} label={label} value={value} />
@@ -12216,7 +12323,7 @@ export function LocationDetailPage() {
                 fullWidth
               />
               <TextField
-                label="District"
+                label="Region"
                 value={memberEditForm.district}
                 onChange={(event) =>
                   setMemberEditForm((current) => ({
@@ -12300,7 +12407,7 @@ export function LocationDetailPage() {
               }
               fullWidth
             >
-              {assignableLocationRoles.map((role) => (
+              {availableAssignableLocationRoles.map((role) => (
                 <MenuItem key={role} value={role}>
                   {role}
                 </MenuItem>
@@ -12801,7 +12908,10 @@ export function LocationDetailPage() {
                 fullWidth
               >
                 {requisitionSaving ? (
-                  <CircularProgress size={18} color="inherit" />
+                  <>
+                    <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                    Saving...
+                  </>
                 ) : editingRequisition ? (
                   "Update"
                 ) : (
@@ -12822,6 +12932,7 @@ export function LocationDetailPage() {
         ministryMembers={ministryMembers}
         cashbooks={cashbooks}
         roles={roles}
+        availableAssignableLocationRoles={availableAssignableLocationRoles}
         zones={zones}
         missionalFamilies={missionalFamilies}
         schedules={schedules}
@@ -13467,7 +13578,7 @@ export function LocationDetailPage() {
                 fullWidth
               />
               <TextField
-                label="District"
+                label="Region"
                 value={locationEditForm.district}
                 onChange={(event) =>
                   setLocationEditForm((current) => ({
@@ -13877,7 +13988,10 @@ export function LocationDetailPage() {
         open={Boolean(feedback)}
         autoHideDuration={4000}
         onClose={() => setFeedback(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: isDesktop ? "right" : "center",
+        }}
       >
         {feedback ? (
           <Alert
@@ -13926,6 +14040,7 @@ type LocationActionDrawerProps = {
   ministryMembers: Member[];
   cashbooks: Cashbook[];
   roles: Role[];
+  availableAssignableLocationRoles: string[];
   zones: Zone[];
   missionalFamilies: MissionalFamily[];
   schedules: Schedule[];
@@ -14805,6 +14920,7 @@ function LocationActionDrawer({
   ministryMembers,
   cashbooks,
   roles,
+  availableAssignableLocationRoles,
   zones,
   missionalFamilies,
   schedules,
@@ -15073,11 +15189,16 @@ function LocationActionDrawer({
                 select
                 label="Role"
                 value={form.role}
-                onChange={(event) => onChange({ role: event.target.value })}
+                onChange={(event) =>
+                  onChange({
+                    role: event.target.value,
+                    title: event.target.value,
+                  })
+                }
                 required
                 fullWidth
               >
-                {assignableLocationRoles.map((role) => (
+                {availableAssignableLocationRoles.map((role) => (
                   <MenuItem key={role} value={role}>
                     {role}
                   </MenuItem>
@@ -15966,7 +16087,7 @@ function LocationActionDrawer({
                     fullWidth
                   />
                   <TextField
-                    label="District"
+                    label="Region"
                     value={form.district}
                     onChange={(event) =>
                       onChange({ district: event.target.value })
@@ -16008,7 +16129,10 @@ function LocationActionDrawer({
                   fullWidth
                 >
                   {saving ? (
-                    <CircularProgress size={18} color="inherit" />
+                    <>
+                      <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                      Saving...
+                    </>
                   ) : (
                     "Save"
                   )}
@@ -16023,7 +16147,10 @@ function LocationActionDrawer({
                   fullWidth
                 >
                   {saving ? (
-                    <CircularProgress size={18} color="inherit" />
+                    <>
+                      <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                      Saving...
+                    </>
                   ) : (
                     "Register"
                   )}
@@ -17967,7 +18094,7 @@ export function CashbookDetailPage() {
                         </Box>
                       </Stack>
                     )}
-                    <Stack direction="row" spacing={1.5}>
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
                   <Button
                     variant="outlined"
                     color="secondary"
@@ -17990,7 +18117,7 @@ export function CashbookDetailPage() {
                     disabled={addTransactionSaveDisabled}
                     fullWidth
                   >
-                    Save
+                    {transactionSaving ? "Saving..." : "Save"}
                   </Button>
                     </Stack>
                   </LocalizationProvider>

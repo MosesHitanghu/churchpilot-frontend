@@ -5,7 +5,6 @@ import LoginIcon from "@mui/icons-material/Login";
 import PaidIcon from "@mui/icons-material/Paid";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import PlaceIcon from "@mui/icons-material/Place";
-import StorageIcon from "@mui/icons-material/Storage";
 import {
   AppBar,
   Box,
@@ -13,14 +12,17 @@ import {
   Card,
   CardContent,
   Container,
+  CircularProgress,
   Stack,
   Toolbar,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { SiteFooter } from "../components/SiteFooter";
 import type { Account } from "../lib/api";
+import { getSessionAccount } from "../lib/session";
 
 const AuthDrawer = lazy(() => import("./AuthPages").then((module) => ({ default: module.AuthDrawer })));
 
@@ -43,7 +45,7 @@ const features = [
   {
     title: "Church Database",
     description: "Keep members, zones, missional families, leaders, and contact records organized for daily ministry work.",
-    icon: <StorageIcon />,
+    icon: <GroupsIcon />,
   },
   {
     title: "Reporting",
@@ -63,8 +65,10 @@ type LandingPageProps = {
 };
 
 export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPageProps) {
+  const navigate = useNavigate();
   const [authMode, setAuthMode] = useState<"login" | "signup">(initialAuthMode || "login");
   const [authOpen, setAuthOpen] = useState(Boolean(initialAuthMode));
+  const [loginLoading, setLoginLoading] = useState(false);
   useEffect(() => {
     if (initialAuthMode) {
       setAuthMode(initialAuthMode);
@@ -77,6 +81,21 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
     setAuthOpen(true);
   };
 
+  const loginFromSavedSession = () => {
+    setLoginLoading(true);
+    const account = getSessionAccount();
+    window.setTimeout(() => {
+      if (account) {
+        onAuthenticated(account);
+        navigate("/app");
+      } else {
+        setAuthMode("login");
+        setAuthOpen(true);
+      }
+      setLoginLoading(false);
+    }, 150);
+  };
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <AppBar position="static" elevation={0} sx={{ bgcolor: "primary.main", display: { xs: "none", md: "block" } }}>
@@ -84,8 +103,13 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 900 }}>
             ChurchPilot
           </Typography>
-          <Button color="inherit" startIcon={<LoginIcon />} onClick={() => openAuth("login")}>
-            Login
+          <Button
+            color="inherit"
+            startIcon={loginLoading ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
+            onClick={loginFromSavedSession}
+            disabled={loginLoading}
+          >
+            {loginLoading ? "Logging in..." : "Login"}
           </Button>
           <Button variant="contained" color="secondary" startIcon={<PersonAddIcon />} onClick={() => openAuth("signup")}>
             Create Account
@@ -109,14 +133,6 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
               <Typography variant="body1" sx={{ mt: 2, color: "rgba(255,255,255,0.78)", maxWidth: 680, fontSize: { md: 18 } }}>
                 ChurchPilot brings locations, people, schedules, reports, cashbooks, requisitions, and attendance into one calm workspace for ministry teams.
               </Typography>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ display: { xs: "flex", md: "none" }, mt: 4 }}>
-                <Button size="large" variant="contained" color="secondary" startIcon={<PersonAddIcon />} onClick={() => openAuth("signup")}>
-                  Create Account
-                </Button>
-                <Button size="large" variant="outlined" color="inherit" startIcon={<LoginIcon />} onClick={() => openAuth("login")}>
-                  Login
-                </Button>
-              </Stack>
             </Grid>
             <Grid size={{ xs: 12, md: 5 }}>
               <Card sx={{ bgcolor: "rgba(255,255,255,0.08)", color: "white", border: "1px solid rgba(255,255,255,0.22)" }}>
@@ -132,6 +148,21 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
                   </Typography>
                 </CardContent>
               </Card>
+              <Stack direction="column" spacing={2} sx={{ display: { xs: "flex", md: "none" }, mt: 3 }}>
+                <Button size="large" variant="contained" color="secondary" startIcon={<PersonAddIcon />} onClick={() => openAuth("signup")}>
+                  Create Account
+                </Button>
+                <Button
+                  size="large"
+                  variant="outlined"
+                  color="inherit"
+                  startIcon={loginLoading ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
+                  onClick={loginFromSavedSession}
+                  disabled={loginLoading}
+                >
+                  {loginLoading ? "Logging in..." : "Login"}
+                </Button>
+              </Stack>
             </Grid>
           </Grid>
         </Container>
