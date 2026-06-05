@@ -2,20 +2,21 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import ArticleIcon from "@mui/icons-material/Article";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import PaidIcon from "@mui/icons-material/Paid";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  CircularProgress,
+  InputAdornment,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
   Paper,
+  Skeleton,
   Stack,
-  Tab,
-  Tabs,
+  TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
@@ -23,6 +24,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import {
   api,
   type Account,
@@ -32,7 +34,7 @@ import {
 } from "../lib/api";
 import { CashbookActionsMenu } from "./DetailPages";
 
-type FinancialPageProps = {
+type AllCashBooksProps = {
   account: Account;
 };
 
@@ -101,13 +103,62 @@ function cashbookTotals(cashbook: Cashbook) {
   };
 }
 
-export function FinancialPage({ account }: FinancialPageProps) {
+function AllCashbooksSkeleton() {
+  return (
+    <>
+      <PageHeader title="All Cashbooks" icon={<PaidIcon />} />
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            sx={{
+              alignItems: { md: "center" },
+              justifyContent: "space-between",
+            }}
+          >
+            <Skeleton variant="text" width={180} height={34} />
+            <Skeleton
+              variant="rounded"
+              height={40}
+              sx={{ width: { xs: "100%", md: 360 } }}
+            />
+          </Stack>
+          <Grid container spacing={2}>
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack spacing={1.5}>
+                    <Skeleton variant="text" width="70%" height={28} />
+                    <Skeleton variant="text" width="45%" />
+                    <Stack spacing={1}>
+                      {Array.from({ length: 5 }).map((__, rowIndex) => (
+                        <Skeleton
+                          key={rowIndex}
+                          variant="rounded"
+                          height={24}
+                        />
+                      ))}
+                    </Stack>
+                    <Skeleton variant="rounded" height={34} />
+                  </Stack>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Stack>
+      </Paper>
+    </>
+  );
+}
+
+export function AllCashBooks({ account }: AllCashBooksProps) {
   const routerLocation = useLocation();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<AccountOverview | null>(null);
   const [cashbooks, setCashbooks] = useState<Cashbook[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [tab, setTab] = useState(0);
+  const [cashbookSearch, setCashbookSearch] = useState("");
   const [error, setError] = useState("");
 
   const loadFinancialResources = () =>
@@ -134,38 +185,75 @@ export function FinancialPage({ account }: FinancialPageProps) {
     loadFinancialResources();
   }, [account.id]);
 
+  const normalizedCashbookSearch = cashbookSearch.trim().toLowerCase();
+  const filteredCashbooks = cashbooks.filter((cashbook) => {
+    if (!normalizedCashbookSearch) {
+      return true;
+    }
+    return [cashbook.title, cashbook.location_title].some((value) =>
+      String(value || "")
+        .toLowerCase()
+        .includes(normalizedCashbookSearch),
+    );
+  });
+  const {
+    visibleItems: visibleCashbooks,
+    sentinelRef: cashbookLoadMoreRef,
+    hasMore: hasMoreCashbooks,
+  } = useIncrementalList(filteredCashbooks, 12, normalizedCashbookSearch);
+
   if (error) {
     return <Alert severity="error">{error}</Alert>;
   }
 
   if (!overview) {
-    return (
-      <Box sx={{ display: "grid", placeItems: "center", minHeight: 360 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <AllCashbooksSkeleton />;
   }
 
   return (
     <>
-      <PageHeader title="Finances" icon={<PaidIcon />} />
-      <Tabs
-        value={tab}
-        onChange={(_, nextTab: number) => setTab(nextTab)}
-        sx={{ mb: 3 }}
-      >
-        <Tab label={`CashBooks (${cashbooks.length})`} />
-      </Tabs>
-      {tab === 0 && cashbooks.length === 0 ? (
-        <EmptyState
-          title="No CashBooks Yet"
-          message="CashBooks will appear after a location super admin or permitted location admin creates them."
-        />
-      ) : null}
-      {tab === 0 ? (
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Grid container spacing={2}>
-            {cashbooks.map((cashbook) => {
+      <PageHeader title="All Cashbooks" icon={<PaidIcon />} />
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 900 }}>
+              All Cashbooks
+            </Typography>
+            <TextField
+              size="small"
+              label="Search cashbooks"
+              value={cashbookSearch}
+              onChange={(event) => setCashbookSearch(event.target.value)}
+              sx={{ width: { xs: "100%", md: 360 } }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Stack>
+          {cashbooks.length === 0 ? (
+            <EmptyState
+              title="No CashBooks Yet"
+              message="CashBooks will appear after a location super admin or permitted location admin creates them."
+            />
+          ) : filteredCashbooks.length === 0 ? (
+            <EmptyState
+              title="No CashBooks Found"
+              message="Try another cashbook title or location."
+            />
+          ) : (
+          <Stack spacing={1.5}>
+            <Grid container spacing={2}>
+              {visibleCashbooks.map((cashbook) => {
               const totals = cashbookTotals(cashbook);
               return (
                 <Grid key={cashbook.cashbook_id} size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -271,10 +359,15 @@ export function FinancialPage({ account }: FinancialPageProps) {
                   </Paper>
                 </Grid>
               );
-            })}
-          </Grid>
-        </Paper>
-      ) : null}
+              })}
+            </Grid>
+            {hasMoreCashbooks ? (
+              <Box ref={cashbookLoadMoreRef} sx={{ height: 24 }} />
+            ) : null}
+          </Stack>
+          )}
+        </Stack>
+      </Paper>
     </>
   );
 }

@@ -61,7 +61,7 @@ type AppShellProps = {
 
 const navItems = [
   { label: "Home", path: "/app", icon: <HomeIcon />, menu: "home" },
-  { label: "Finances", path: "/app/financial", icon: <PaidIcon />, menu: "financial" },
+  { label: "All Cashbooks", path: "/app/financial", icon: <PaidIcon />, menu: "financial" },
   { label: "Support Center", path: "/app/support", icon: <HelpCenterIcon />, menu: "support" },
   { label: "Roles", path: "/app/roles", icon: <ManageAccountsIcon />, menu: "admins" },
 ];

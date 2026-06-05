@@ -73,6 +73,7 @@ import {
   RadioGroup,
   FormControlLabel,
   InputAdornment,
+  Skeleton,
   Snackbar,
   Stack,
   Tab,
@@ -130,6 +131,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import { ResourceCard } from "../components/ResourceCard";
 import defaultProfilePictureAsset from "../assets/default profile picture.png";
+import { useIncrementalList } from "../hooks/useIncrementalList";
 import {
   api,
   getApiErrorMessage,
@@ -1224,9 +1226,75 @@ function LoadingOrError({ error }: { error: string }) {
   if (error) {
     return <Alert severity="error">{error}</Alert>;
   }
+  return <LocationTabSkeleton />;
+}
+
+type ResponsiveGridSize = {
+  xs?: number;
+  sm?: number;
+  md?: number;
+  lg?: number;
+  xl?: number;
+};
+
+function IncrementalGrid<T,>({
+  items,
+  getKey,
+  renderItem,
+  gridSize,
+  batchSize = 9,
+  resetKey = "",
+}: {
+  items: T[];
+  getKey: (item: T, index: number) => string | number;
+  renderItem: (item: T, index: number) => ReactNode;
+  gridSize: ResponsiveGridSize;
+  batchSize?: number;
+  resetKey?: string;
+}) {
+  const { visibleItems, sentinelRef, hasMore } = useIncrementalList(
+    items,
+    batchSize,
+    resetKey,
+  );
+
   return (
-    <Box sx={{ display: "grid", placeItems: "center", minHeight: 360 }}>
-      <CircularProgress />
+    <Stack spacing={1.5}>
+      <Grid container spacing={2}>
+        {visibleItems.map((item, index) => (
+          <Grid key={getKey(item, index)} size={gridSize}>
+            {renderItem(item, index)}
+          </Grid>
+        ))}
+      </Grid>
+      {hasMore ? <Box ref={sentinelRef} sx={{ height: 24 }} /> : null}
+    </Stack>
+  );
+}
+
+function LocationTabSkeleton() {
+  return (
+    <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Stack spacing={2}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          <Skeleton variant="rounded" height={40} sx={{ flex: 1 }} />
+          <Skeleton variant="rounded" height={40} sx={{ width: { xs: "100%", sm: 180 } }} />
+        </Stack>
+        <Grid container spacing={2}>
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <Grid key={item} size={{ xs: 12, md: 6, xl: 4 }}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Stack spacing={1.25}>
+                  <Skeleton variant="rounded" height={150} />
+                  <Skeleton variant="text" width="72%" />
+                  <Skeleton variant="text" width="48%" />
+                  <Skeleton variant="rounded" height={34} />
+                </Stack>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Stack>
     </Box>
   );
 }
@@ -1624,6 +1692,7 @@ function ScheduleCalendar({
   attendances,
   startDate,
   mandatoryTypes,
+  canManage = false,
   onDetails,
   onEdit,
   onRemove,
@@ -1632,6 +1701,7 @@ function ScheduleCalendar({
   attendances: Attendance[];
   startDate?: string | null;
   mandatoryTypes?: string[];
+  canManage?: boolean;
   onDetails: (schedule: Schedule) => void;
   onEdit: (schedule: Schedule) => void;
   onRemove: (schedule: Schedule) => void;
@@ -1975,29 +2045,33 @@ function ScheduleCalendar({
         >
           Details
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuSchedule) {
-              onEdit(menuSchedule);
-            }
-            setScheduleMenuAnchor(null);
-          }}
-        >
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          Edit
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuSchedule) {
-              onRemove(menuSchedule);
-            }
-            setScheduleMenuAnchor(null);
-          }}
-        >
-          Remove
-        </MenuItem>
+        {canManage ? (
+          <MenuItem
+            onClick={() => {
+              if (menuSchedule) {
+                onEdit(menuSchedule);
+              }
+              setScheduleMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <EditIcon fontSize="small" />
+            </ListItemIcon>
+            Edit
+          </MenuItem>
+        ) : null}
+        {canManage ? (
+          <MenuItem
+            onClick={() => {
+              if (menuSchedule) {
+                onRemove(menuSchedule);
+              }
+              setScheduleMenuAnchor(null);
+            }}
+          >
+            Remove
+          </MenuItem>
+        ) : null}
       </Menu>
     </Paper>
   );
@@ -2131,9 +2205,23 @@ export function LocationDetailPage() {
   const [selectedMemberAction, setSelectedMemberAction] =
     useState<Member | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
+  const [zoneSearch, setZoneSearch] = useState("");
+  const [familySearch, setFamilySearch] = useState("");
   const [memberDetailsOpen, setMemberDetailsOpen] = useState(false);
   const [memberEditOpen, setMemberEditOpen] = useState(false);
   const [memberEditForm, setMemberEditForm] = useState({
+    fname: "",
+    lname: "",
+    email: "",
+    phone_number: "",
+    gender: "",
+    marital_status: "",
+    occupation: "",
+    country: "",
+    district: "",
+    city: "",
+    address: "",
+    profile_picture: "",
     audience: "Physical",
     status: "Active",
     start_date: "",
@@ -2215,6 +2303,7 @@ export function LocationDetailPage() {
   const [reportForm, setReportForm] = useState<ReportForm>(blankReportForm);
   const [reportSaving, setReportSaving] = useState(false);
   const [reportError, setReportError] = useState("");
+  const [reportSuccess, setReportSuccess] = useState("");
   const [financialReportMenuAnchor, setFinancialReportMenuAnchor] =
     useState<null | HTMLElement>(null);
   const [selectedFinancialReport] = useState<LocationReport | null>(null);
@@ -3072,11 +3161,39 @@ export function LocationDetailPage() {
     setSelectedBranchAction(null);
   };
 
+  const readMemberEditProfilePicture = (file?: File | null) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      setMemberEditForm((current) => ({
+        ...current,
+        profile_picture: String(reader.result || ""),
+      }));
+    reader.readAsDataURL(file);
+  };
+
   const openSelectedLocationMemberEdit = () => {
     if (!selectedMemberAction) {
       return;
     }
+    const memberAccount = accounts.find((item) =>
+      idsEqual(item.id, selectedMemberAction.user_id),
+    );
     setMemberEditForm({
+      fname: memberAccount?.fname || "",
+      lname: memberAccount?.lname || "",
+      email: memberAccount?.email || "",
+      phone_number: memberAccount?.phone_number || "",
+      gender: memberAccount?.gender || "",
+      marital_status: memberAccount?.marital_status || "",
+      occupation: memberAccount?.occupation || "",
+      country: memberAccount?.country || "",
+      district: memberAccount?.district || "",
+      city: memberAccount?.city || "",
+      address: memberAccount?.address || "",
+      profile_picture: memberAccount?.profile_picture || "",
       audience: selectedMemberAction.audience || "Physical",
       status: selectedMemberAction.status || "Active",
       start_date: selectedMemberAction.start_date || "",
@@ -3091,12 +3208,42 @@ export function LocationDetailPage() {
     }
     setRelatedError("");
     try {
-      await api.patch(`/members/${selectedMemberAction.id}`, {
-        requester_id: account.id,
-        audience: memberEditForm.audience,
-        status: memberEditForm.status,
-        start_date: memberEditForm.start_date || null,
-      });
+      const memberUpdate = api.patch(`/members/${selectedMemberAction.id}`, {
+          requester_id: account.id,
+          audience: memberEditForm.audience,
+          status: memberEditForm.status,
+          start_date: memberEditForm.start_date || null,
+        });
+      const accountUpdate = selectedMemberAction.user_id
+        ? api.patch<Account>(`/accounts/${selectedMemberAction.user_id}`, {
+            fname: memberEditForm.fname,
+            lname: memberEditForm.lname,
+            title: [memberEditForm.fname, memberEditForm.lname]
+              .filter(Boolean)
+              .join(" "),
+            email: memberEditForm.email || null,
+            phone_number: memberEditForm.phone_number || null,
+            gender: memberEditForm.gender || null,
+            marital_status: memberEditForm.marital_status || null,
+            occupation: memberEditForm.occupation || null,
+            country: memberEditForm.country || null,
+            district: memberEditForm.district || null,
+            city: memberEditForm.city || null,
+            address: memberEditForm.address || null,
+            profile_picture: memberEditForm.profile_picture || null,
+          })
+        : Promise.resolve(null);
+      const [, accountResponse] = await Promise.all([
+        memberUpdate,
+        accountUpdate,
+      ]);
+      if (accountResponse?.data) {
+        setAccounts((current) =>
+          current.map((item) =>
+            idsEqual(item.id, accountResponse.data.id) ? accountResponse.data : item,
+          ),
+        );
+      }
       setMemberEditOpen(false);
       setSelectedMemberAction(null);
       await loadRelatedRecords();
@@ -3211,6 +3358,7 @@ export function LocationDetailPage() {
       value: "",
     });
     setReportError("");
+    setReportSuccess("");
     setReportCreateOpen(true);
   };
 
@@ -3676,6 +3824,7 @@ export function LocationDetailPage() {
     }
     setReportSaving(true);
     setReportError("");
+    setReportSuccess("");
     try {
       if (reportForm.type === "Financial" && !collectionReportRows.length) {
         setReportError(
@@ -3733,9 +3882,13 @@ export function LocationDetailPage() {
       }
       setActiveTab(10);
       await loadRelatedRecords(["reports"]);
-      setReportCreateOpen(false);
-      setReportEditOpen(false);
-      setReportEditCard(null);
+      setSelectedReportMenu("Local");
+      setReportsView("cards");
+      setReportSuccess(
+        existingCard
+          ? "Report updated successfully."
+          : "Report created successfully.",
+      );
     } catch (requestError) {
       setReportError(
         getApiErrorMessage(
@@ -3807,6 +3960,7 @@ export function LocationDetailPage() {
       status: editableReport.status || "Draft",
     });
     setReportError("");
+    setReportSuccess("");
     setReportCreateOpen(false);
     setReportEditOpen(true);
   };
@@ -4883,8 +5037,8 @@ export function LocationDetailPage() {
       setActionError("First name and last name are required.");
       return;
     }
-    if (!actionForm.email.trim() && !actionForm.phone_number.trim()) {
-      setActionError("Enter either an email or phone number for login.");
+    if (!actionForm.phone_number.trim()) {
+      setActionError("Phone number is required.");
       return;
     }
     setActionSaving(true);
@@ -4895,7 +5049,7 @@ export function LocationDetailPage() {
         location_id: location.id,
         fname: actionForm.fname,
         lname: actionForm.lname,
-        email: actionForm.email,
+        email: actionForm.email || null,
         phone_number: actionForm.phone_number,
         gender: actionForm.gender,
         marital_status: actionForm.marital_status,
@@ -5213,6 +5367,8 @@ export function LocationDetailPage() {
     activeRoleNames.some((role) => roleNames.includes(role));
   const isLocationManagerForUi =
     isLocationOwner || locationManagerRoles.includes(activeLocationRole);
+  const canViewLocationAsViewer =
+    !isLocationManagerForUi && hasActiveRole(["Viewer", "Evaluator"]);
   const hasZoneScopedRole = hasActiveRole(zoneScopedRoles);
   const hasFamilyScopedRole = hasActiveRole(familyScopedRoles);
   const hasScopedLeadershipRole = hasZoneScopedRole || hasFamilyScopedRole;
@@ -5224,6 +5380,8 @@ export function LocationDetailPage() {
     isLocationOwner ||
     locationPastorRoles.includes(activeLocationRole) ||
     hasActiveRole(["Requisitions Approver"]);
+  const canManageLocationResources = isLocationManagerForUi || hasScopedLeadershipRole;
+  const canManageLocationReports = isLocationManagerForUi;
   const isBranchLocation =
     String(location?.type || "").toLowerCase() === "branch";
   const isOfficeLocation =
@@ -5236,6 +5394,8 @@ export function LocationDetailPage() {
       ? [8, 9]
       : isLocationManagerForUi
         ? [10, 2, 3, 1, 8, 9, 5, ...(subscriptionsEnforced ? [12] : [])]
+        : canViewLocationAsViewer
+          ? [10, 2, 3, 1, 8]
         : hasScopedLeadershipRole
           ? [1, 3, 8]
           : [
@@ -5243,7 +5403,10 @@ export function LocationDetailPage() {
               ...(canApproveRequisitionsForUi ? [2] : []),
             ]
   )
-    .filter((tabId) => isBranchLocation || ![3, 1, 9].includes(tabId))
+    .filter(
+      (tabId) =>
+        isBranchLocation || canViewLocationAsViewer || ![3, 1, 9].includes(tabId),
+    )
     .filter((tabId) => !isOfficeLocation || tabId !== 11);
   useEffect(() => {
     if (
@@ -5398,6 +5561,36 @@ export function LocationDetailPage() {
         : membershipView === "branches"
           ? branches.length
           : members.length;
+  const normalizedZoneSearch = zoneSearch.trim().toLowerCase();
+  const filteredZones = zones.filter((zone) => {
+    if (!normalizedZoneSearch) {
+      return true;
+    }
+    return [
+      zone.title,
+      memberName(accounts, zone.leader1_id),
+      memberName(accounts, zone.leader2_id),
+    ].some((value) =>
+      String(value || "")
+        .toLowerCase()
+        .includes(normalizedZoneSearch),
+    );
+  });
+  const normalizedFamilySearch = familySearch.trim().toLowerCase();
+  const filteredMissionalFamilies = missionalFamilies.filter((family) => {
+    if (!normalizedFamilySearch) {
+      return true;
+    }
+    return [
+      family.title,
+      memberName(accounts, family.leader1_id),
+      memberName(accounts, family.leader2_id),
+    ].some((value) =>
+      String(value || "")
+        .toLowerCase()
+        .includes(normalizedFamilySearch),
+    );
+  });
   useEffect(() => {
     if (
       !membershipMenuOptions.some((option) => option.value === membershipView)
@@ -5436,96 +5629,125 @@ export function LocationDetailPage() {
         message="Create a zone to see it here."
       />
     ) : (
-      <Grid container spacing={2}>
-        {zones.map((zone) => (
-          <Grid key={zone.id} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
-              <Stack spacing={1.5} sx={{ height: "100%" }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="overline" color="text.secondary">
-                      Zone
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
-                      {zone.title || `Zone #${zone.id}`}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    aria-label="Zone actions"
-                    size="small"
-                    onClick={(event) => openZoneMenu(event, zone)}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-                <List dense disablePadding>
-                  {[
-                    {
-                      label: "Leader",
-                      value: memberName(accounts, zone.leader1_id),
-                      subtitle: memberPhone(accounts, zone.leader1_id),
-                    },
-                    {
-                      label: "Assistant",
-                      value: memberName(accounts, zone.leader2_id),
-                      subtitle: memberPhone(accounts, zone.leader2_id),
-                    },
-                    {
-                      label: "Missional Families",
-                      value: String(
-                        missionalFamilies.filter(
-                          (family) => family.zone_id === zone.id,
-                        ).length,
-                      ),
-                    },
-                  ].map((item) => (
-                    <ListItem
-                      key={item.label}
-                      disableGutters
-                      divider
-                      sx={{ py: 0.75, gap: 1 }}
+      <Stack spacing={2}>
+        <TextField
+          size="small"
+          label="Search zones"
+          value={zoneSearch}
+          onChange={(event) => setZoneSearch(event.target.value)}
+          fullWidth
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        {filteredZones.length ? (
+          <IncrementalGrid
+            items={filteredZones}
+            resetKey={normalizedZoneSearch}
+            gridSize={{ xs: 12, sm: 6, md: 4 }}
+            getKey={(zone) => zone.id}
+            renderItem={(zone) => (
+                <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
+                  <Stack spacing={1.5} sx={{ height: "100%" }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                      }}
                     >
-                      <ListItemText
-                        primary={item.label}
-                        slotProps={{
-                          primary: {
-                            variant: "body2",
-                            color: "text.secondary",
-                          },
-                        }}
-                      />
-                      <Box sx={{ minWidth: 0, textAlign: "right" }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.value}
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="overline" color="text.secondary">
+                          Zone
                         </Typography>
-                        {item.subtitle ? (
-                          <Typography variant="caption" color="text.secondary">
-                            {item.subtitle}
-                          </Typography>
-                        ) : null}
+                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
+                          {zone.title || `Zone #${zone.id}`}
+                        </Typography>
                       </Box>
-                    </ListItem>
-                  ))}
-                </List>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: "auto" }}
-                >
-                  {zone.description || "No description has been added yet."}
-                </Typography>
-              </Stack>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
+                      {canManageLocationResources ? (
+                        <IconButton
+                          aria-label="Zone actions"
+                          size="small"
+                          onClick={(event) => openZoneMenu(event, zone)}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                    </Stack>
+                    <List dense disablePadding>
+                      {[
+                        {
+                          label: "Leader",
+                          value: memberName(accounts, zone.leader1_id),
+                          subtitle: memberPhone(accounts, zone.leader1_id),
+                        },
+                        {
+                          label: "Assistant",
+                          value: memberName(accounts, zone.leader2_id),
+                          subtitle: memberPhone(accounts, zone.leader2_id),
+                        },
+                        {
+                          label: "Missional Families",
+                          value: String(
+                            missionalFamilies.filter(
+                              (family) => family.zone_id === zone.id,
+                            ).length,
+                          ),
+                        },
+                      ].map((item) => (
+                        <ListItem
+                          key={item.label}
+                          disableGutters
+                          divider
+                          sx={{ py: 0.75, gap: 1 }}
+                        >
+                          <ListItemText
+                            primary={item.label}
+                            slotProps={{
+                              primary: {
+                                variant: "body2",
+                                color: "text.secondary",
+                              },
+                            }}
+                          />
+                          <Box sx={{ minWidth: 0, textAlign: "right" }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {item.value}
+                            </Typography>
+                            {item.subtitle ? (
+                              <Typography variant="caption" color="text.secondary">
+                                {item.subtitle}
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: "auto" }}
+                    >
+                      {zone.description || "No description has been added yet."}
+                    </Typography>
+                  </Stack>
+                </Paper>
+            )}
+          />
+        ) : (
+          <EmptyState
+            title="No zones found"
+            message="Try another zone title or leader name."
+          />
+        )}
+      </Stack>
     );
   const missionalFamiliesMembershipContent =
     missionalFamilies.length === 0 ? (
@@ -5534,113 +5756,142 @@ export function LocationDetailPage() {
         message="Create a missional family to see it here."
       />
     ) : (
-      <Grid container spacing={2}>
-        {missionalFamilies.map((family) => (
-          <Grid key={family.id} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
-              <Stack spacing={1.5} sx={{ height: "100%" }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="overline" color="text.secondary">
-                      Missional Family
-                    </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
-                      {family.title || `Missional Family #${family.id}`}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    aria-label="Missional family actions"
-                    size="small"
-                    onClick={(event) => openFamilyMenu(event, family)}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-                <List dense disablePadding>
-                  {[
-                    {
-                      label: "Zone",
-                      value:
-                        zones.find((zone) => idsEqual(zone.id, family.zone_id))
-                          ?.title || "Not set",
-                    },
-                    {
-                      label: "Leader",
-                      value: memberName(accounts, family.leader1_id),
-                      subtitle: memberPhone(accounts, family.leader1_id),
-                    },
-                    {
-                      label: "Assistant",
-                      value: memberName(accounts, family.leader2_id),
-                      subtitle: memberPhone(accounts, family.leader2_id),
-                    },
-                    {
-                      label: "Members",
-                      value: String(
-                        missionalFamilyMembers.filter(
-                          (member) =>
-                            idsEqual(member.mf_id, family.id) &&
-                            member.status !== "Inactive",
-                        ).length,
-                      ),
-                    },
-                  ].map((item) => (
-                    <ListItem
-                      key={item.label}
-                      disableGutters
-                      divider
-                      sx={{ py: 0.75, gap: 1 }}
+      <Stack spacing={2}>
+        <TextField
+          size="small"
+          label="Search missional families"
+          value={familySearch}
+          onChange={(event) => setFamilySearch(event.target.value)}
+          fullWidth
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        {filteredMissionalFamilies.length ? (
+          <IncrementalGrid
+            items={filteredMissionalFamilies}
+            resetKey={normalizedFamilySearch}
+            gridSize={{ xs: 12, sm: 6, md: 4 }}
+            getKey={(family) => family.id}
+            renderItem={(family) => (
+                <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
+                  <Stack spacing={1.5} sx={{ height: "100%" }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                      }}
                     >
-                      <ListItemIcon sx={{ minWidth: 30 }}>
-                        <CheckCircleIcon color="secondary" fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item.label}
-                        slotProps={{
-                          primary: {
-                            variant: "body2",
-                            color: "text.secondary",
-                          },
-                        }}
-                      />
-                      <Box sx={{ minWidth: 0, textAlign: "right" }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.value}
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="overline" color="text.secondary">
+                          Missional Family
                         </Typography>
-                        {item.subtitle ? (
-                          <Typography variant="caption" color="text.secondary">
-                            {item.subtitle}
-                          </Typography>
-                        ) : null}
+                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
+                          {family.title || `Missional Family #${family.id}`}
+                        </Typography>
                       </Box>
-                    </ListItem>
-                  ))}
-                </List>
-                <Typography variant="body2" color="text.secondary">
-                  {family.description || "No description has been added yet."}
-                </Typography>
-                <Box sx={{ mt: "auto" }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<GroupsIcon />}
-                    onClick={() => openFamilyMembers(family)}
-                  >
-                    View Members
-                  </Button>
-                </Box>
-              </Stack>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
+                      {canManageLocationResources ? (
+                        <IconButton
+                          aria-label="Missional family actions"
+                          size="small"
+                          onClick={(event) => openFamilyMenu(event, family)}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
+                    </Stack>
+                    <List dense disablePadding>
+                      {[
+                        {
+                          label: "Zone",
+                          value:
+                            zones.find((zone) => idsEqual(zone.id, family.zone_id))
+                              ?.title || "Not set",
+                        },
+                        {
+                          label: "Leader",
+                          value: memberName(accounts, family.leader1_id),
+                          subtitle: memberPhone(accounts, family.leader1_id),
+                        },
+                        {
+                          label: "Assistant",
+                          value: memberName(accounts, family.leader2_id),
+                          subtitle: memberPhone(accounts, family.leader2_id),
+                        },
+                        {
+                          label: "Members",
+                          value: String(
+                            missionalFamilyMembers.filter(
+                              (member) =>
+                                idsEqual(member.mf_id, family.id) &&
+                                member.status !== "Inactive",
+                            ).length,
+                          ),
+                        },
+                      ].map((item) => (
+                        <ListItem
+                          key={item.label}
+                          disableGutters
+                          divider
+                          sx={{ py: 0.75, gap: 1 }}
+                        >
+                          <ListItemIcon sx={{ minWidth: 30 }}>
+                            <CheckCircleIcon color="secondary" fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.label}
+                            slotProps={{
+                              primary: {
+                                variant: "body2",
+                                color: "text.secondary",
+                              },
+                            }}
+                          />
+                          <Box sx={{ minWidth: 0, textAlign: "right" }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {item.value}
+                            </Typography>
+                            {item.subtitle ? (
+                              <Typography variant="caption" color="text.secondary">
+                                {item.subtitle}
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Typography variant="body2" color="text.secondary">
+                      {family.description || "No description has been added yet."}
+                    </Typography>
+                    <Box sx={{ mt: "auto" }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<GroupsIcon />}
+                        onClick={() => openFamilyMembers(family)}
+                      >
+                        View Members
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Paper>
+            )}
+          />
+        ) : (
+          <EmptyState
+            title="No missional families found"
+            message="Try another family title or leader name."
+          />
+        )}
+      </Stack>
     );
 
   const listedLocations = [
@@ -7280,8 +7531,12 @@ export function LocationDetailPage() {
         }}
       />
       {filteredMembers.length ? (
-        <Grid container spacing={2}>
-          {filteredMembers.map((member) => {
+        <IncrementalGrid
+          items={filteredMembers}
+          resetKey={memberSearch.trim().toLowerCase()}
+          gridSize={{ xs: 12, md: 6, xl: 4 }}
+          getKey={(member) => member.id}
+          renderItem={(member) => {
             const memberAccount = accounts.find((item) =>
               idsEqual(item.id, member.user_id),
             );
@@ -7328,48 +7583,46 @@ export function LocationDetailPage() {
               },
             ];
             return (
-              <Grid key={member.id} size={{ xs: 12, md: 6, xl: 4 }}>
-                <Paper
-                  variant="outlined"
-                  sx={{ height: "100%", overflow: "hidden" }}
+              <Paper
+                variant="outlined"
+                sx={{ height: "100%", overflow: "hidden" }}
+              >
+                <Box sx={{ position: "relative", bgcolor: "action.hover" }}>
+                  <Avatar
+                    src={
+                      memberAccount?.profile_picture ||
+                      defaultProfilePictureAsset
+                    }
+                    alt={memberDisplayName}
+                    variant="rounded"
+                    sx={{
+                      width: "100%",
+                      height: 220,
+                      borderRadius: 0,
+                      bgcolor: "background.paper",
+                      "& img": { objectFit: "cover" },
+                    }}
+                  />
+                </Box>
+                <List
+                  dense
+                  disablePadding
+                  sx={{ borderTop: 1, borderColor: "divider" }}
                 >
-                  <Box sx={{ position: "relative", bgcolor: "action.hover" }}>
-                    <Avatar
-                      src={
-                        memberAccount?.profile_picture ||
-                        defaultProfilePictureAsset
-                      }
-                      alt={memberDisplayName}
-                      variant="rounded"
-                      sx={{
-                        width: "100%",
-                        height: 220,
-                        borderRadius: 0,
-                        bgcolor: "background.paper",
-                        "& img": { objectFit: "cover" },
-                      }}
+                  {rows.map((row) => (
+                    <MemberInfoRow
+                      key={row.label}
+                      label={row.label}
+                      value={row.value}
+                      icon={row.icon}
+                      action={row.action}
                     />
-                  </Box>
-                  <List
-                    dense
-                    disablePadding
-                    sx={{ borderTop: 1, borderColor: "divider" }}
-                  >
-                    {rows.map((row) => (
-                      <MemberInfoRow
-                        key={row.label}
-                        label={row.label}
-                        value={row.value}
-                        icon={row.icon}
-                        action={row.action}
-                      />
-                    ))}
-                  </List>
-                </Paper>
-              </Grid>
+                  ))}
+                </List>
+              </Paper>
             );
-          })}
-        </Grid>
+          }}
+        />
       ) : (
         <EmptyState
           title="No members found"
@@ -7473,34 +7726,36 @@ export function LocationDetailPage() {
       )
       .values(),
   ).sort((left, right) => right.date.localeCompare(left.date));
-  const attendanceRecordActions = (attendance: Attendance) => (
-    <IconButton
-      size="small"
-      aria-label="Attendance actions"
-      onClick={(event) => {
-        event.stopPropagation();
-        setSelectedAttendance(attendance);
-        setSelectedMfAttendance(null);
-        setAttendanceMenuAnchor(event.currentTarget);
-      }}
-    >
-      <MoreVertIcon fontSize="small" />
-    </IconButton>
-  );
-  const mfAttendanceRecordActions = (attendance: MfAttendance) => (
-    <IconButton
-      size="small"
-      aria-label="Missional attendance actions"
-      onClick={(event) => {
-        event.stopPropagation();
-        setSelectedMfAttendance(attendance);
-        setSelectedAttendance(null);
-        setAttendanceMenuAnchor(event.currentTarget);
-      }}
-    >
-      <MoreVertIcon fontSize="small" />
-    </IconButton>
-  );
+  const attendanceRecordActions = (attendance: Attendance) =>
+    canManageLocationResources ? (
+      <IconButton
+        size="small"
+        aria-label="Attendance actions"
+        onClick={(event) => {
+          event.stopPropagation();
+          setSelectedAttendance(attendance);
+          setSelectedMfAttendance(null);
+          setAttendanceMenuAnchor(event.currentTarget);
+        }}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+    ) : null;
+  const mfAttendanceRecordActions = (attendance: MfAttendance) =>
+    canManageLocationResources ? (
+      <IconButton
+        size="small"
+        aria-label="Missional attendance actions"
+        onClick={(event) => {
+          event.stopPropagation();
+          setSelectedMfAttendance(attendance);
+          setSelectedAttendance(null);
+          setAttendanceMenuAnchor(event.currentTarget);
+        }}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+    ) : null;
   return (
     <>
       <Menu
@@ -7942,19 +8197,21 @@ export function LocationDetailPage() {
                   {option.label}
                 </MenuItem>
               ))}
-              <Divider />
-              <MenuItem
-                onClick={() => {
-                  setReportMenuAnchor(null);
-                  setActiveTab(10);
-                  setReportSettingsOpen(true);
-                }}
-              >
-                <ListItemIcon>
-                  <SettingsIcon fontSize="small" />
-                </ListItemIcon>
-                {reportSettingsMenuOption}
-              </MenuItem>
+              {canManageLocationReports ? <Divider /> : null}
+              {canManageLocationReports ? (
+                <MenuItem
+                  onClick={() => {
+                    setReportMenuAnchor(null);
+                    setActiveTab(10);
+                    setReportSettingsOpen(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <SettingsIcon fontSize="small" />
+                  </ListItemIcon>
+                  {reportSettingsMenuOption}
+                </MenuItem>
+              ) : null}
             </Menu>
             <Menu
               id="finances-tab-menu"
@@ -8066,12 +8323,12 @@ export function LocationDetailPage() {
                     inset: 0,
                     zIndex: 5,
                     display: "grid",
-                    placeItems: "center",
+                    alignItems: "start",
                     pointerEvents: "none",
                     bgcolor: "background.paper",
                   }}
                 >
-                  <CircularProgress />
+                  <LocationTabSkeleton />
                 </Box>
               ) : null}
               <TabPanel value={activeTab} index={0}>
@@ -8668,18 +8925,20 @@ export function LocationDetailPage() {
                                         </Typography>
                                       ) : null}
                                     </Box>
-                                    <IconButton
-                                      aria-label="Requisition actions"
-                                      size="small"
-                                      onClick={(event) => {
-                                        setSelectedRequisition(requisition);
-                                        setRequisitionMenuAnchor(
-                                          event.currentTarget,
-                                        );
-                                      }}
-                                    >
-                                      <MoreVertIcon fontSize="small" />
-                                    </IconButton>
+                                    {canCreateForActiveTab ? (
+                                      <IconButton
+                                        aria-label="Requisition actions"
+                                        size="small"
+                                        onClick={(event) => {
+                                          setSelectedRequisition(requisition);
+                                          setRequisitionMenuAnchor(
+                                            event.currentTarget,
+                                          );
+                                        }}
+                                      >
+                                        <MoreVertIcon fontSize="small" />
+                                      </IconButton>
+                                    ) : null}
                                   </Stack>
                                   <List
                                     dense
@@ -9304,13 +9563,15 @@ export function LocationDetailPage() {
                                   {zone.title || `Zone #${zone.id}`}
                                 </Typography>
                               </Box>
-                              <IconButton
-                                aria-label="Zone actions"
-                                size="small"
-                                onClick={(event) => openZoneMenu(event, zone)}
-                              >
-                                <MoreVertIcon fontSize="small" />
-                              </IconButton>
+                              {canManageLocationResources ? (
+                                <IconButton
+                                  aria-label="Zone actions"
+                                  size="small"
+                                  onClick={(event) => openZoneMenu(event, zone)}
+                                >
+                                  <MoreVertIcon fontSize="small" />
+                                </IconButton>
+                              ) : null}
                             </Stack>
                             <List dense disablePadding>
                               {[
@@ -9432,15 +9693,17 @@ export function LocationDetailPage() {
                                     `Missional Family #${family.id}`}
                                 </Typography>
                               </Box>
-                              <IconButton
-                                aria-label="Missional family actions"
-                                size="small"
-                                onClick={(event) =>
-                                  openFamilyMenu(event, family)
-                                }
-                              >
-                                <MoreVertIcon fontSize="small" />
-                              </IconButton>
+                              {canManageLocationResources ? (
+                                <IconButton
+                                  aria-label="Missional family actions"
+                                  size="small"
+                                  onClick={(event) =>
+                                    openFamilyMenu(event, family)
+                                  }
+                                >
+                                  <MoreVertIcon fontSize="small" />
+                                </IconButton>
+                              ) : null}
                             </Stack>
                             <List dense disablePadding>
                               {[
@@ -9551,6 +9814,7 @@ export function LocationDetailPage() {
                   attendances={attendances}
                   startDate={location.reporting_start_date}
                   mandatoryTypes={mandatoryTypesForLocation(location)}
+                  canManage={isLocationManagerForUi}
                   onDetails={setScheduleDetails}
                   onEdit={openScheduleEdit}
                   onRemove={(schedule) =>
@@ -11031,18 +11295,16 @@ export function LocationDetailPage() {
                 fullWidth
               />
             ) : null}
-            <TextField
-              type="date"
+            <DatePicker
               label="Reporting Start Date"
-              value={reportSettingsForm.reporting_start_date}
-              onChange={(event) =>
+              value={toPickerValue(reportSettingsForm.reporting_start_date)}
+              onChange={(value) =>
                 setReportSettingsForm((current) => ({
                   ...current,
-                  reporting_start_date: event.target.value,
+                  reporting_start_date: fromPickerValue(value),
                 }))
               }
-              fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ textField: { fullWidth: true } }}
             />
             <Autocomplete
               multiple
@@ -11568,26 +11830,30 @@ export function LocationDetailPage() {
           </ListItemIcon>
           Details
         </MenuItem>
-        <MenuItem onClick={openSelectedLocationMemberEdit}>
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          Edit
-        </MenuItem>
-        <MenuItem
-          onClick={() =>
-            requestDeleteConfirmation(
-              "Delete Member?",
-              "This will remove the selected member from this location.",
-              () => deleteSelectedLocationMember(),
-            )
-          }
-        >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" />
-          </ListItemIcon>
-          Delete
-        </MenuItem>
+        {isLocationManagerForUi ? (
+          <MenuItem onClick={openSelectedLocationMemberEdit}>
+            <ListItemIcon>
+              <EditIcon fontSize="small" />
+            </ListItemIcon>
+            Edit
+          </MenuItem>
+        ) : null}
+        {isLocationManagerForUi ? (
+          <MenuItem
+            onClick={() =>
+              requestDeleteConfirmation(
+                "Delete Member?",
+                "This will remove the selected member from this location.",
+                () => deleteSelectedLocationMember(),
+              )
+            }
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" />
+            </ListItemIcon>
+            Delete
+          </MenuItem>
+        ) : null}
       </Menu>
       <Dialog
         open={memberDetailsOpen}
@@ -11717,6 +11983,130 @@ export function LocationDetailPage() {
         <DialogTitle>Edit Member</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
+            <Box
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                readMemberEditProfilePicture(event.dataTransfer.files?.[0]);
+              }}
+              sx={{
+                border: 1,
+                borderStyle: "dashed",
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 2,
+                display: "flex",
+                gap: 2,
+                alignItems: "center",
+                bgcolor: "action.hover",
+              }}
+            >
+              <Avatar
+                src={memberEditForm.profile_picture || defaultProfilePictureAsset}
+                variant="rounded"
+                sx={{
+                  width: 92,
+                  height: 92,
+                  borderRadius: 1.5,
+                  bgcolor: "background.paper",
+                }}
+              />
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
+                  Profile Picture
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1 }}
+                >
+                  Drag an image here or choose one from your device.
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    component="label"
+                    startIcon={<CloudUploadIcon />}
+                  >
+                    Upload
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) =>
+                        readMemberEditProfilePicture(event.target.files?.[0])
+                      }
+                    />
+                  </Button>
+                  {memberEditForm.profile_picture ? (
+                    <Button
+                      size="small"
+                      color="secondary"
+                      onClick={() =>
+                        setMemberEditForm((current) => ({
+                          ...current,
+                          profile_picture: "",
+                        }))
+                      }
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </Stack>
+              </Box>
+            </Box>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="First Name"
+                value={memberEditForm.fname}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    fname: event.target.value,
+                  }))
+                }
+                required
+                fullWidth
+              />
+              <TextField
+                label="Last Name"
+                value={memberEditForm.lname}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    lname: event.target.value,
+                  }))
+                }
+                required
+                fullWidth
+              />
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Email"
+                value={memberEditForm.email}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                label="Phone Number"
+                value={memberEditForm.phone_number}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    phone_number: event.target.value,
+                  }))
+                }
+                required
+                fullWidth
+              />
+            </Stack>
             <TextField
               select
               label="Audience"
@@ -11766,6 +12156,101 @@ export function LocationDetailPage() {
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
             />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Gender"
+                select
+                value={memberEditForm.gender}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    gender: event.target.value,
+                  }))
+                }
+                fullWidth
+              >
+                <MenuItem value="">Not set</MenuItem>
+                <MenuItem value="Male">Male</MenuItem>
+                <MenuItem value="Female">Female</MenuItem>
+              </TextField>
+              <TextField
+                label="Marital Status"
+                select
+                value={memberEditForm.marital_status}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    marital_status: event.target.value,
+                  }))
+                }
+                fullWidth
+              >
+                <MenuItem value="">Not set</MenuItem>
+                <MenuItem value="Single">Single</MenuItem>
+                <MenuItem value="Married">Married</MenuItem>
+                <MenuItem value="Widow">Widow</MenuItem>
+                <MenuItem value="Widwowar">Widwowar</MenuItem>
+              </TextField>
+            </Stack>
+            <TextField
+              label="Occupation"
+              value={memberEditForm.occupation}
+              onChange={(event) =>
+                setMemberEditForm((current) => ({
+                  ...current,
+                  occupation: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Country"
+                value={memberEditForm.country}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    country: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                label="District"
+                value={memberEditForm.district}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    district: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="City"
+                value={memberEditForm.city}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    city: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                label="Address"
+                value={memberEditForm.address}
+                onChange={(event) =>
+                  setMemberEditForm((current) => ({
+                    ...current,
+                    address: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -11773,6 +12258,11 @@ export function LocationDetailPage() {
           <Button
             variant="contained"
             onClick={() => void saveSelectedLocationMember()}
+            disabled={
+              !memberEditForm.fname.trim() ||
+              !memberEditForm.lname.trim() ||
+              !memberEditForm.phone_number.trim()
+            }
           >
             Save
           </Button>
@@ -11905,39 +12395,41 @@ export function LocationDetailPage() {
             {familyMemberError ? (
               <Alert severity="error">{familyMemberError}</Alert>
             ) : null}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-              <Autocomplete
-                options={eligibleFamilyMembers}
-                value={
-                  eligibleFamilyMembers.find((member) =>
-                    idsEqual(member.id, selectedFamilyMemberId),
-                  ) || null
-                }
-                onChange={(_, value) =>
-                  setSelectedFamilyMemberId(value?.id || "")
-                }
-                getOptionLabel={accountOptionLabel}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Add member"
-                    size="small"
-                    fullWidth
-                  />
-                )}
-                fullWidth
-              />
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={() => void addSelectedFamilyMember()}
-                disabled={familyMemberSaving || !selectedFamilyMemberId}
-                sx={{ minWidth: 120 }}
-              >
-                Add
-              </Button>
-            </Stack>
+            {canManageLocationResources ? (
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <Autocomplete
+                  options={eligibleFamilyMembers}
+                  value={
+                    eligibleFamilyMembers.find((member) =>
+                      idsEqual(member.id, selectedFamilyMemberId),
+                    ) || null
+                  }
+                  onChange={(_, value) =>
+                    setSelectedFamilyMemberId(value?.id || "")
+                  }
+                  getOptionLabel={accountOptionLabel}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Add member"
+                      size="small"
+                      fullWidth
+                    />
+                  )}
+                  fullWidth
+                />
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => void addSelectedFamilyMember()}
+                  disabled={familyMemberSaving || !selectedFamilyMemberId}
+                  sx={{ minWidth: 120 }}
+                >
+                  Add
+                </Button>
+              </Stack>
+            ) : null}
             <List
               dense
               disablePadding
@@ -11954,23 +12446,25 @@ export function LocationDetailPage() {
                     key={member.id}
                     divider
                     secondaryAction={
-                      <IconButton
-                        aria-label={`Remove ${memberName(accounts, member.member_id)}`}
-                        color="error"
-                        size="small"
-                        onClick={() =>
-                          requestDeleteConfirmation(
-                            "Remove Family Member?",
-                            `This will remove ${memberName(accounts, member.member_id)} from this missional family.`,
-                            () => removeSelectedFamilyMember(member),
-                          )
-                        }
-                        disabled={familyMemberSaving}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                      canManageLocationResources ? (
+                        <IconButton
+                          aria-label={`Remove ${memberName(accounts, member.member_id)}`}
+                          color="error"
+                          size="small"
+                          onClick={() =>
+                            requestDeleteConfirmation(
+                              "Remove Family Member?",
+                              `This will remove ${memberName(accounts, member.member_id)} from this missional family.`,
+                              () => removeSelectedFamilyMember(member),
+                            )
+                          }
+                          disabled={familyMemberSaving}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      ) : null
                     }
-                    sx={{ pr: 7 }}
+                    sx={{ pr: canManageLocationResources ? 7 : 0 }}
                   >
                     <ListItemIcon sx={{ minWidth: 34 }}>
                       <CheckCircleIcon color="secondary" fontSize="small" />
@@ -12548,24 +13042,35 @@ export function LocationDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
+      <Drawer
+        anchor="right"
         open={reportCreateOpen || reportEditOpen}
         onClose={() => {
           setReportCreateOpen(false);
           setReportEditOpen(false);
           setReportEditCard(null);
         }}
-        fullWidth
-        maxWidth="sm"
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: "100vw", sm: 560 },
+              maxWidth: "100%",
+            },
+          },
+        }}
       >
-        <DialogTitle>
-          {reportEditOpen ? "Modify General Report" : "Create General Report"}
-        </DialogTitle>
-        <DialogContent>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <DialogTitle>
+            {reportEditOpen ? "Modify General Report" : "Create General Report"}
+          </DialogTitle>
+          <DialogContent sx={{ flex: 1 }}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {reportError ? (
                 <Alert severity="error">{reportError}</Alert>
+              ) : null}
+              {reportSuccess ? (
+                <Alert severity="success">{reportSuccess}</Alert>
               ) : null}
               <Tabs
                 value={reportForm.type}
@@ -12792,25 +13297,20 @@ export function LocationDetailPage() {
                     label="Total Attendance"
                     type="number"
                     value={reportForm.value}
-                    onChange={(event) =>
-                      updateReportForm({ value: event.target.value })
-                    }
+                    slotProps={{ input: { readOnly: true } }}
                     fullWidth
                     required
                   />
-                  <TextField
-                    label="Status"
-                    value={reportForm.status}
-                    select
-                    fullWidth
-                    required
-                    slotProps={{ input: { readOnly: true } }}
-                  >
-                    <MenuItem value="Draft">Draft</MenuItem>
-                  </TextField>
                 </Stack>
               ) : (
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) 48px",
+                    gap: 1,
+                    alignItems: "start",
+                  }}
+                >
                   <TextField
                     label="Remission Value"
                     type="number"
@@ -12819,17 +13319,22 @@ export function LocationDetailPage() {
                     fullWidth
                     required
                   />
-                  <TextField
-                    label="Status"
-                    value={reportForm.status}
-                    select
-                    fullWidth
-                    required
-                    slotProps={{ input: { readOnly: true } }}
-                  >
-                    <MenuItem value="Draft">Draft</MenuItem>
-                  </TextField>
-                </Stack>
+                  <Tooltip title="Manage remissions">
+                    <IconButton
+                      aria-label="Manage remissions"
+                      color="secondary"
+                      onClick={openLocationRemissionDrawer}
+                      sx={{
+                        border: 1,
+                        borderColor: "divider",
+                        height: 40,
+                        width: 40,
+                      }}
+                    >
+                      <SettingsIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               )}
               <TextField
                 label="Description"
@@ -12841,33 +13346,38 @@ export function LocationDetailPage() {
                 minRows={3}
                 fullWidth
               />
+              <Stack direction="row" spacing={1.5}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => {
+                    setReportCreateOpen(false);
+                    setReportEditOpen(false);
+                    setReportEditCard(null);
+                  }}
+                  disabled={reportSaving}
+                  fullWidth
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() =>
+                    void (reportEditOpen
+                      ? saveLocationReportDraft(reportEditCard)
+                      : handleCreateLocationReport())
+                  }
+                  disabled={reportCreateDisabled}
+                  fullWidth
+                >
+                  {reportSaving ? "Saving..." : "Save"}
+                </Button>
+              </Stack>
             </Stack>
           </LocalizationProvider>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setReportCreateOpen(false);
-              setReportEditOpen(false);
-              setReportEditCard(null);
-            }}
-            disabled={reportSaving}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() =>
-              void (reportEditOpen
-                ? saveLocationReportDraft(reportEditCard)
-                : handleCreateLocationReport())
-            }
-            disabled={reportCreateDisabled}
-          >
-            {reportSaving ? "Saving..." : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </DialogContent>
+        </Box>
+      </Drawer>
       <Drawer
         anchor="right"
         open={locationEditOpen}
@@ -12990,18 +13500,16 @@ export function LocationDetailPage() {
               }
               fullWidth
             />
-            <TextField
-              type="date"
+            <DatePicker
               label="Reporting Start Date"
-              value={locationEditForm.reporting_start_date}
-              onChange={(event) =>
+              value={toPickerValue(locationEditForm.reporting_start_date)}
+              onChange={(value) =>
                 setLocationEditForm((current) => ({
                   ...current,
-                  reporting_start_date: event.target.value,
+                  reporting_start_date: fromPickerValue(value),
                 }))
               }
-              fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ textField: { fullWidth: true } }}
             />
             <Stack direction="row" spacing={1.5}>
               <Button
@@ -14415,7 +14923,7 @@ function LocationActionDrawer({
     saving ||
     !form.fname.trim() ||
     !form.lname.trim() ||
-    (!form.email.trim() && !form.phone_number.trim());
+    !form.phone_number.trim();
   const readProfilePicture = (file?: File | null) => {
     if (!file || !file.type.startsWith("image/")) {
       return;
@@ -14813,7 +15321,6 @@ function LocationActionDrawer({
                     onChange={(event) =>
                       onChange({ email: event.target.value })
                     }
-                    required={!form.phone_number.trim()}
                     fullWidth
                   />
                   <TextField
@@ -14822,7 +15329,7 @@ function LocationActionDrawer({
                     onChange={(event) =>
                       onChange({ phone_number: event.target.value })
                     }
-                    required={!form.email.trim()}
+                    required
                     fullWidth
                   />
                 </Stack>
@@ -15509,7 +16016,8 @@ function LocationActionDrawer({
               )}
               {activeTab === 1 ? (
                 <Button
-                  variant="outlined"
+                  variant="contained"
+                  color="primary"
                   onClick={onRegisterMember}
                   disabled={memberRegisterDisabled}
                   fullWidth
@@ -16300,6 +16808,24 @@ export function CashbookDetailPage() {
     }
   };
 
+  const addTransactionSaveDisabled =
+    transactionSaving ||
+    (transactionTab === "schedule"
+      ? !scheduleCollectionForm.schedule_date ||
+        !scheduleCollectionForm.particular_id ||
+        !scheduleCollectionForm.mode
+      : !transactionForm.category ||
+        !transactionForm.particular_id ||
+        !transactionForm.mode);
+
+  const saveActiveTransactionTab = () => {
+    if (transactionTab === "schedule") {
+      void saveScheduleCollections();
+      return;
+    }
+    void addTransaction();
+  };
+
   const loadParticulars = async () => {
     if (!cashbook.location_id) {
       return;
@@ -16883,14 +17409,28 @@ export function CashbookDetailPage() {
               </Stack>
             </Paper>
             {cashbook.can_add_transactions ? (
-              <Dialog
+              <Drawer
+                anchor="right"
                 open={addTransactionOpen}
                 onClose={() => setAddTransactionOpen(false)}
-                fullWidth
-                maxWidth="md"
+                slotProps={{
+                  paper: {
+                    sx: {
+                      width: { xs: "100vw", sm: 720 },
+                      maxWidth: "100%",
+                    },
+                  },
+                }}
               >
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                  }}
+                >
                 <DialogTitle>Add Transaction</DialogTitle>
-                <DialogContent>
+                <DialogContent sx={{ flex: 1 }}>
                   {transactionError ? (
                     <Alert severity="error" sx={{ mb: 2 }}>
                       {transactionError}
@@ -17116,27 +17656,6 @@ export function CashbookDetailPage() {
                             minRows={1}
                             fullWidth
                           />
-                          <Button
-                            variant="contained"
-                            onClick={addTransaction}
-                            startIcon={<SaveIcon />}
-                            disabled={
-                              transactionSaving ||
-                              !transactionForm.category ||
-                              !transactionForm.particular_id ||
-                              !transactionForm.mode
-                            }
-                            sx={{
-                              minWidth: 120,
-                              alignSelf: { xs: "stretch", md: "center" },
-                            }}
-                          >
-                            {transactionSaving ? (
-                              <CircularProgress size={18} color="inherit" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
                         </Box>
                       </Stack>
                     ) : (
@@ -17445,43 +17964,39 @@ export function CashbookDetailPage() {
                             minRows={1}
                             fullWidth
                           />
-                          <Button
-                            variant="contained"
-                            onClick={saveScheduleCollections}
-                            startIcon={<SaveIcon />}
-                            disabled={
-                              transactionSaving ||
-                              !scheduleCollectionForm.schedule_date ||
-                              !scheduleCollectionForm.particular_id ||
-                              !scheduleCollectionForm.mode
-                            }
-                            sx={{
-                              minWidth: 170,
-                              alignSelf: { xs: "stretch", md: "center" },
-                            }}
-                          >
-                            {transactionSaving ? (
-                              <CircularProgress size={18} color="inherit" />
-                            ) : (
-                              "Save Collections"
-                            )}
-                          </Button>
                         </Box>
                       </Stack>
                     )}
-                  </LocalizationProvider>
-                </DialogContent>
-                <DialogActions>
+                    <Stack direction="row" spacing={1.5}>
                   <Button
                     variant="outlined"
                     color="secondary"
                     onClick={() => setAddTransactionOpen(false)}
                     disabled={transactionSaving}
+                    fullWidth
                   >
                     Close
                   </Button>
-                </DialogActions>
-              </Dialog>
+                  <Button
+                    variant="contained"
+                    onClick={saveActiveTransactionTab}
+                    startIcon={
+                      transactionSaving ? (
+                        <CircularProgress size={18} color="inherit" />
+                      ) : (
+                        <SaveIcon />
+                      )
+                    }
+                    disabled={addTransactionSaveDisabled}
+                    fullWidth
+                  >
+                    Save
+                  </Button>
+                    </Stack>
+                  </LocalizationProvider>
+                </DialogContent>
+                </Box>
+              </Drawer>
             ) : null}
             <Box sx={{ display: { xs: "block", md: "none" } }}>
               {monthlyTransactionCards.length === 0 ? (

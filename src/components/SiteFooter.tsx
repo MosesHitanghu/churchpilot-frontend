@@ -32,9 +32,6 @@ export function SiteFooter({ contained = true }: SiteFooterProps) {
           <LinkedInIcon fontSize="small" />
         </IconButton>
       </Stack>
-      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.64)" }}>
-        Designed by Moses Hitanghu
-      </Typography>
     </Stack>
   );
 

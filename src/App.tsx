@@ -1,13 +1,14 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
+import { LoadingState } from "./components/LoadingState";
 import type { Account } from "./lib/api";
 import { getSessionAccount } from "./lib/session";
 import type { AppThemeMode } from "./theme";
 
 const AppShell = lazy(() => import("./layouts/AppShell").then((module) => ({ default: module.AppShell })));
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
-const FinancialPage = lazy(() => import("./pages/FinancialPage").then((module) => ({ default: module.FinancialPage })));
+const AllCashBooks = lazy(() => import("./pages/AllCashBooks").then((module) => ({ default: module.AllCashBooks })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then((module) => ({ default: module.EventsPage })));
 const RolesPage = lazy(() => import("./pages/AccountAdminsPage").then((module) => ({ default: module.RolesPage })));
 const PostsPage = lazy(() => import("./pages/PostsPage").then((module) => ({ default: module.PostsPage })));
@@ -28,7 +29,7 @@ function App({ themeMode, onToggleTheme }: AppProps) {
   const [account, setAccount] = useState<Account | null>(initialAccount);
 
   return (
-    <Suspense fallback={<div className="route-loading">Loading...</div>}>
+    <Suspense fallback={<LoadingState minHeight="100vh" />}>
       <Routes>
       <Route path="/" element={<LandingPage onAuthenticated={setAccount} />} />
       <Route path="/admin" element={<AdminDashboardPage />} />
@@ -52,7 +53,7 @@ function App({ themeMode, onToggleTheme }: AppProps) {
       >
         <Route index element={<LocationDetailPage />} />
         <Route path="posts" element={<PostsPage account={account as Account} />} />
-        <Route path="financial" element={<FinancialPage account={account as Account} />} />
+        <Route path="financial" element={<AllCashBooks account={account as Account} />} />
         <Route path="events" element={<EventsPage account={account as Account} />} />
         <Route path="support" element={<SupportCenterPage account={account as Account} />} />
         <Route path="roles" element={<RolesPage account={account as Account} />} />
