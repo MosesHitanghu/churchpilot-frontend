@@ -5463,7 +5463,7 @@ export function LocationDetailPage() {
       : isLocationManagerForUi
         ? [10, 2, 3, 1, 8, 9, 5, ...(subscriptionsEnforced ? [12] : [])]
         : canViewLocationAsViewer
-          ? [10, 2, 3, 1, 8]
+          ? [10, 2, 3, 1, 8, 9]
         : hasScopedLeadershipRole
           ? [1, 3, 8]
           : [

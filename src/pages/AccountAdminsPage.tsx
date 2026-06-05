@@ -1,22 +1,70 @@
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import {
   Alert,
   Box,
   Chip,
   CircularProgress,
+  Grid,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
   Paper,
   Stack,
   Typography,
 } from "@mui/material";
-import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useEffect, useMemo, useState } from "react";
-import { CustomDataGridToolbar } from "../components/DataGridToolbar";
 import { PageHeader } from "../components/PageHeader";
 import { api, type Account, type Role } from "../lib/api";
 
 type RolesPageProps = {
   account: Account;
 };
+
+type GroupedRole = {
+  role: string;
+  title: string;
+  rows: Role[];
+};
+
+function roleResourceLabel(role: Role) {
+  if (role.location_title) {
+    return role.location_title;
+  }
+  if (role.location_id) {
+    return `Location #${role.location_id}`;
+  }
+  if (role.cashbook_title) {
+    return role.cashbook_title;
+  }
+  if (role.cashbook_id) {
+    return `Cashbook #${role.cashbook_id}`;
+  }
+  if ((role.scope || "").toLowerCase() === "account") {
+    return "Account";
+  }
+  if ((role.scope || "").toLowerCase() === "ministry") {
+    return "Ministry";
+  }
+  return role.scope || "Assigned resource";
+}
+
+function roleDetailRows(role: Role) {
+  return [
+    role.title && role.title !== role.role
+      ? ["Title", role.title]
+      : null,
+    ["Scope", role.scope || "Not set"],
+    [
+      "Authorized by",
+      role.authorizer_display_name ||
+        (role.authorizer_id ? `Account #${role.authorizer_id}` : "Not set"),
+    ],
+    role.start_date ? ["Start date", role.start_date] : null,
+    role.end_date ? ["End date", role.end_date] : null,
+  ].filter(Boolean) as string[][];
+}
 
 export function RolesPage({ account }: RolesPageProps) {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -52,52 +100,25 @@ export function RolesPage({ account }: RolesPageProps) {
     };
   }, [account.id]);
 
-  const columns = useMemo<GridColDef<Role>[]>(
-    () => [
-      { field: "__no", headerName: "No", width: 72, sortable: false, filterable: false },
-      { field: "user_display_name", headerName: "Person", minWidth: 180, flex: 1.1, valueGetter: (_, row) => row.user_display_name || (row.user_id ? `Account #${row.user_id}` : "Not assigned") },
-      { field: "role", headerName: "Role", minWidth: 170, flex: 1 },
-      { field: "title", headerName: "Title", minWidth: 180, flex: 1 },
-      { field: "scope", headerName: "Scope", minWidth: 130, flex: 0.8 },
-      { field: "location_title", headerName: "Location", minWidth: 170, flex: 1, valueGetter: (_, row) => row.location_title || (row.location_id ? `Location #${row.location_id}` : "Ministry") },
-      { field: "status", headerName: "Status", minWidth: 120, flex: 0.7 },
-      { field: "authorizer_display_name", headerName: "Authorized By", minWidth: 170, flex: 1, valueGetter: (_, row) => row.authorizer_display_name || (row.authorizer_id ? `Account #${row.authorizer_id}` : "Not set") },
-      { field: "start_date", headerName: "Start Date", minWidth: 130, flex: 0.8 },
-      { field: "end_date", headerName: "End Date", minWidth: 130, flex: 0.8 },
-    ],
-    [],
-  );
-  const displayedRoles = useMemo(() => {
-    const ministryRoles = roles.filter((role) => role.scope === "Ministry");
-    const ministryMembers = ministryRoles.filter((role) => role.role === "Ministry Member" && role.status === "Active");
-    const otherRoles = ministryRoles.filter((role) => role.role !== "Ministry Member");
-    return ministryMembers.length
-      ? [
-          ...otherRoles,
-          {
-            ...ministryMembers[0],
-            id: "__ministry_members__",
-            user_display_name: "Ministry Members",
-            title: "Ministry Members",
-            member_count: ministryMembers.length,
-          },
-        ]
-      : otherRoles;
+  const groupedRoles = useMemo<GroupedRole[]>(() => {
+    const groups = new Map<string, GroupedRole>();
+    roles.forEach((role) => {
+      const roleName = role.role || "Assigned Role";
+      const group = groups.get(roleName);
+      if (group) {
+        group.rows.push(role);
+        return;
+      }
+      groups.set(roleName, {
+        role: roleName,
+        title: role.title || roleName,
+        rows: [role],
+      });
+    });
+    return Array.from(groups.values()).sort((left, right) =>
+      left.role.localeCompare(right.role, undefined, { sensitivity: "base" }),
+    );
   }, [roles]);
-  const displayColumns = useMemo<GridColDef<Role>[]>(
-    () => columns.map((column) => column.field === "user_display_name"
-      ? {
-          ...column,
-          renderCell: (params) => params.row.id === "__ministry_members__" ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: "center", height: "100%" }}>
-              <Typography variant="body2">Ministry Members</Typography>
-              <Chip size="small" color="secondary" label={params.row.member_count || 0} />
-            </Stack>
-          ) : params.value,
-        }
-      : column),
-    [columns],
-  );
 
   if (error) {
     return <Alert severity="error">{error}</Alert>;
@@ -110,37 +131,127 @@ export function RolesPage({ account }: RolesPageProps) {
         subtitle="Roles assigned to your account."
         icon={<ManageAccountsIcon />}
       />
-      <Paper variant="outlined" sx={{ height: 620, width: "100%" }}>
-        {loading ? (
-          <Box sx={{ display: "grid", placeItems: "center", height: "100%" }}>
+      {loading ? (
+        <Paper variant="outlined" sx={{ minHeight: 360 }}>
+          <Box sx={{ display: "grid", placeItems: "center", minHeight: 360 }}>
             <CircularProgress />
           </Box>
-        ) : (
-          <DataGrid
-            rows={displayedRoles.map((role, index) => ({ ...role, __no: index + 1 }))}
-            columns={displayColumns}
-            getRowId={(row) => row.id}
-            pageSizeOptions={[10, 25, 50, 100]}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 10, page: 0 },
-              },
-              sorting: {
-                sortModel: [{ field: "created_at", sort: "desc" }],
-              },
-            }}
-            slots={{ toolbar: CustomDataGridToolbar }}
-            showToolbar
-            disableRowSelectionOnClick
-            sx={{
-              border: 0,
-              "& .MuiDataGrid-columnHeaders": {
-                bgcolor: "background.default",
-              },
-            }}
-          />
+        </Paper>
+      ) : groupedRoles.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Typography variant="body2" color="text.secondary">
+            No roles have been assigned to this account yet.
+          </Typography>
+        </Paper>
+      ) : (
+        <Grid container spacing={2}>
+          {groupedRoles.map((group) => (
+            <Grid key={group.role} size={{ xs: 12, md: 6 }}>
+              <Paper variant="outlined" sx={{ height: "100%", p: 2 }}>
+                <Stack spacing={1.5}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 900 }} noWrap>
+                        {group.role}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {group.title}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      color="secondary"
+                      label={group.rows.length}
+                      sx={{ fontWeight: 800 }}
+                    />
+                  </Stack>
+                  <List
+                    disablePadding
+                    sx={{
+                      border: 1,
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {group.rows.map((role, index) => (
+                      <ListItem
+                        key={role.id}
+                        divider={index < group.rows.length - 1}
+                        sx={{ alignItems: "flex-start" }}
+                        secondaryAction={
+                          <Chip
+                            size="small"
+                            label={role.status || "Active"}
+                            color={
+                              (role.status || "Active") === "Active"
+                                ? "success"
+                                : "default"
+                            }
+                            variant="outlined"
+                          />
+                        }
+                      >
+                        <ListItemIcon sx={{ minWidth: 36, pt: 0.35 }}>
+                          <CheckCircleIcon color="secondary" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={roleResourceLabel(role)}
+                          secondary={
+                            <List dense disablePadding sx={{ mt: 0.75 }}>
+                              {roleDetailRows(role).map(([label, value]) => (
+                                <ListItem
+                                  key={label}
+                                  disableGutters
+                                  sx={{
+                                    borderTop: 1,
+                                    borderColor: "divider",
+                                    py: 0.5,
+                                  }}
+                                >
+                                  <ListItemText
+                                    primary={label}
+                                    secondary={value}
+                                    slotProps={{
+                                      primary: {
+                                        variant: "caption",
+                                        sx: {
+                                          color: "text.secondary",
+                                          fontWeight: 800,
+                                          textTransform: "uppercase",
+                                        },
+                                      },
+                                      secondary: {
+                                        variant: "body2",
+                                        sx: { color: "text.primary" },
+                                      },
+                                    }}
+                                  />
+                                </ListItem>
+                              ))}
+                            </List>
+                          }
+                          sx={{ pr: 9 }}
+                          slotProps={{
+                            primary: { sx: { fontWeight: 800 } },
+                          }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Stack>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
         )}
-      </Paper>
     </>
   );
 }

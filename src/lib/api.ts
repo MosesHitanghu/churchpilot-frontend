@@ -196,6 +196,7 @@ export type Role = {
   authorizer_id?: string | null;
   authorizer_display_name?: string | null;
   location_title?: string | null;
+  cashbook_title?: string | null;
   member_count?: number | null;
   start_date?: string | null;
   end_date?: string | null;
