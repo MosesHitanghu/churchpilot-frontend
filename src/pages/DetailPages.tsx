@@ -7,6 +7,7 @@ import ArticleIcon from "@mui/icons-material/Article";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import BlockIcon from "@mui/icons-material/Block";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ChecklistIcon from "@mui/icons-material/Checklist";
@@ -19,6 +20,7 @@ import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ForwardToInboxIcon from "@mui/icons-material/ForwardToInbox";
 import GroupsIcon from "@mui/icons-material/Groups";
+import HelpOutlinedIcon from "@mui/icons-material/HelpOutlined";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
 import HubIcon from "@mui/icons-material/Hub";
 import InboxIcon from "@mui/icons-material/Inbox";
@@ -81,6 +83,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import {
@@ -330,6 +334,17 @@ type CollectionReportRow = {
 
 type CashbookTransactionReportType = "all" | "normal" | "schedule";
 type ReportsView = "cards" | "locations" | "report";
+type PendingReportDetail = {
+  scheduleDate: string;
+  scheduleType: string;
+  scheduleId?: string | null;
+  scheduleTitle?: string | null;
+  recurrence?: string | null;
+};
+type PendingReportSummary = {
+  count: number;
+  pending?: PendingReportDetail[];
+};
 
 type CashbookTransactionReportRow = {
   no: number;
@@ -2112,6 +2127,8 @@ export function LocationDetailPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const account = getSessionAccount();
+  const theme = useTheme();
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
   const [activeTab, setActiveTab] = useState(10);
   const [cashbooks, setCashbooks] = useState<Cashbook[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -2172,7 +2189,13 @@ export function LocationDetailPage() {
     description: "",
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [ministrySchedules, setMinistrySchedules] = useState<Schedule[]>([]);
+  const [pendingReportCounts, setPendingReportCounts] = useState<
+    Record<string, PendingReportSummary>
+  >({});
+  const [pendingReportDetailsByLocation, setPendingReportDetailsByLocation] =
+    useState<Record<string, PendingReportDetail[]>>({});
+  const [pendingReportCountLoading, setPendingReportCountLoading] =
+    useState(false);
   const [locationTransactions, setLocationTransactions] = useState<
     Transaction[]
   >([]);
@@ -2280,6 +2303,12 @@ export function LocationDetailPage() {
   const [reportsViewAnchor, setReportsViewAnchor] =
     useState<null | HTMLElement>(null);
   const [reportDateFilterOpen, setReportDateFilterOpen] = useState(false);
+  const [pendingReportDetailsDialog, setPendingReportDetailsDialog] = useState<{
+    locationId: string;
+    locationTitle: string;
+    pending: PendingReportDetail[];
+    loading?: boolean;
+  } | null>(null);
   const [reportFilters, setReportFilters] = useState({
     locationSearch: "",
     startDate: "",
@@ -2577,7 +2606,8 @@ export function LocationDetailPage() {
     setEvents([]);
     setRoles([]);
     setSchedules([]);
-    setMinistrySchedules([]);
+    setPendingReportCounts({});
+    setPendingReportDetailsByLocation({});
     setBranches([]);
     setLocationReports([]);
     setReceivedReports([]);
@@ -2892,25 +2922,104 @@ export function LocationDetailPage() {
     if (!location?.owner_id) {
       setMinistryLocations([]);
       setMinistryMembers([]);
-      setMinistrySchedules([]);
+      setPendingReportCounts({});
+      setPendingReportDetailsByLocation({});
       return;
     }
     Promise.all([
       api.get<Location[]>(`/locations?owner_id=${location.owner_id}`),
       api.get<Member[]>(`/members?owner_id=${location.owner_id}`),
-      api.get<Schedule[]>(`/schedules?owner_id=${location.owner_id}`),
     ])
-      .then(([locationsResponse, membersResponse, schedulesResponse]) => {
+      .then(
+        ([
+          locationsResponse,
+          membersResponse,
+        ]) => {
         setMinistryLocations(locationsResponse.data);
         setMinistryMembers(membersResponse.data);
-        setMinistrySchedules(schedulesResponse.data);
-      })
+        },
+      )
       .catch(() => {
         setMinistryLocations([]);
         setMinistryMembers([]);
-        setMinistrySchedules([]);
+        setPendingReportCounts({});
+        setPendingReportDetailsByLocation({});
       });
   }, [location?.owner_id]);
+
+  useEffect(() => {
+    if (!location?.owner_id || !location?.id || !ministryLocations.length) {
+      setPendingReportCounts({});
+      setPendingReportDetailsByLocation({});
+      setPendingReportCountLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const timers: number[] = [];
+    const locationIds = Array.from(
+      new Set(
+        [location, ...ministryLocations]
+          .map((item) => item?.id)
+          .filter(Boolean),
+      ),
+    );
+    const batchSize = 40;
+    setPendingReportCounts({});
+    setPendingReportDetailsByLocation({});
+    setPendingReportCountLoading(true);
+
+    const loadBatch = async (offset: number) => {
+      const batchIds = locationIds.slice(offset, offset + batchSize);
+      if (!batchIds.length || cancelled) {
+        if (!cancelled) {
+          setPendingReportCountLoading(false);
+        }
+        return;
+      }
+      try {
+        const params = new URLSearchParams({
+          owner_id: location.owner_id || "",
+          location_ids: batchIds.join(","),
+        });
+        const response = await api.get<Record<string, PendingReportSummary>>(
+          `/location-pending-report-counts?${params.toString()}`,
+        );
+        if (!cancelled) {
+          setPendingReportCounts((current) => ({
+            ...current,
+            ...response.data,
+          }));
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingReportCounts((current) => {
+            const next = { ...current };
+            batchIds.forEach((locationIdValue) => {
+              next[locationIdValue] = { count: 0, pending: [] };
+            });
+            return next;
+          });
+        }
+      } finally {
+        const nextOffset = offset + batchSize;
+        if (!cancelled && nextOffset < locationIds.length) {
+          timers.push(
+            window.setTimeout(() => {
+              void loadBatch(nextOffset);
+            }, 120),
+          );
+        } else if (!cancelled) {
+          setPendingReportCountLoading(false);
+        }
+      }
+    };
+
+    void loadBatch(0);
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [location?.owner_id, location?.id, ministryLocations]);
 
   useEffect(() => {
     const savedMandatoryTypes = (
@@ -6627,21 +6736,6 @@ export function LocationDetailPage() {
       return {};
     }
   };
-  const forwardedReportDetailScheduleDate = (
-    report: ForwardedLocationReport,
-  ) => {
-    const details = parseForwardedDetails(report);
-    const detailDate =
-      typeof details.scheduleDate === "string" ? details.scheduleDate : "";
-    return detailDate && dayjs(detailDate).isValid()
-      ? dayjs(detailDate).format("YYYY-MM-DD")
-      : "";
-  };
-  const reportSchedulePool = [...schedules, ...ministrySchedules].filter(
-    (schedule, index, list) =>
-      list.findIndex((candidate) => idsEqual(candidate.id, schedule.id)) ===
-      index,
-  );
   const financialReportTransactions = (
     report: LocationReport,
     scheduleDate: string,
@@ -7145,73 +7239,64 @@ export function LocationDetailPage() {
       ? mandatoryTypes
       : defaultMandatoryReportScheduleTypes;
   };
-  const isDueReportScheduleDate = (schedule: Schedule, scheduleDate: string) =>
-    scheduleDate < today() ||
-    (scheduleDate === today() &&
-      Boolean(schedule.time) &&
-      schedule.time! <= dayjs().format("HH:mm:ss"));
-  const forwardedReportRecords = [
-    ...forwardedReports,
-    ...receivedReports,
-  ].filter(
-    (report, index, reports) =>
-      reports.findIndex((candidate) => candidate.id === report.id) === index,
-  );
-  const pendingReportCountForLocation = (
-    sender: Location,
-    reportingStartDate: string,
-    mandatoryTypes: string[],
-  ) => {
-    const effectiveStartDate = reportingStartDate;
-    if (!effectiveStartDate) {
-      return 0;
+  const openPendingReportDetails = async (sender: Location) => {
+    if (!location?.owner_id) {
+      return;
     }
-
-    const reportWindowStart = dayjs(effectiveStartDate);
-    if (
-      !reportWindowStart.isValid() ||
-      reportWindowStart.isAfter(dayjs(), "day")
-    ) {
-      return 0;
-    }
-
-    const reportWindowEnd = dayjs().startOf("day");
-    const senderSchedules = reportSchedulePool.filter(
-      (schedule) =>
-        idsEqual(schedule.location_id, sender.id) &&
-        mandatoryTypes.includes(schedule.type || "") &&
-        schedule.recurrence === "Weekly" &&
-        schedule.weekday != null,
-    );
-    const reportedScheduleDates = new Set(
-      forwardedReportRecords
-        .filter(
-          (report) =>
-            idsEqual(report.source_location_id, sender.id) &&
-            (report.status === "Pending" || report.status === "Approved"),
-        )
-        .map(forwardedReportDetailScheduleDate)
-        .filter(Boolean),
-    );
-
-    const pendingDates = new Set<string>();
-    senderSchedules.forEach((schedule) => {
-      let current = reportWindowStart.day(Number(schedule.weekday));
-      if (current.isBefore(reportWindowStart, "day")) {
-        current = current.add(1, "week");
-      }
-      while (!current.isAfter(reportWindowEnd, "day")) {
-        const scheduleDate = current.format("YYYY-MM-DD");
-        if (
-          isDueReportScheduleDate(schedule, scheduleDate) &&
-          !reportedScheduleDates.has(scheduleDate)
-        ) {
-          pendingDates.add(scheduleDate);
-        }
-        current = current.add(1, "week");
-      }
+    const locationIdValue = sender.id;
+    const locationTitle = sender.title || `Location #${sender.id}`;
+    const cachedPending = pendingReportDetailsByLocation[locationIdValue];
+    setPendingReportDetailsDialog({
+      locationId: locationIdValue,
+      locationTitle,
+      pending: cachedPending || [],
+      loading: !cachedPending,
     });
-    return pendingDates.size;
+    if (cachedPending) {
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        owner_id: location.owner_id,
+        location_id: locationIdValue,
+      });
+      const response = await api.get<PendingReportSummary>(
+        `/location-pending-report-details?${params.toString()}`,
+      );
+      const pending = response.data.pending || [];
+      setPendingReportDetailsByLocation((current) => ({
+        ...current,
+        [locationIdValue]: pending,
+      }));
+      setPendingReportCounts((current) => ({
+        ...current,
+        [locationIdValue]: {
+          count: response.data.count,
+          pending,
+        },
+      }));
+      setPendingReportDetailsDialog((current) =>
+        current?.locationId === locationIdValue
+          ? {
+              locationId: locationIdValue,
+              locationTitle,
+              pending,
+              loading: false,
+            }
+          : current,
+      );
+    } catch (requestError) {
+      const message = getApiErrorMessage(
+        requestError,
+        "Failed to load pending report schedules",
+      );
+      setFeedback({ severity: "error", message });
+      setPendingReportDetailsDialog((current) =>
+        current?.locationId === locationIdValue
+          ? { ...current, loading: false }
+          : current,
+      );
+    }
   };
   const receivedReportLocationStats = activeReportSenderLocations.map(
     (sender) => {
@@ -7257,11 +7342,15 @@ export function LocationDetailPage() {
       const averageAttendance = attendance / weekCount;
       const averageCollections = collections / weekCount;
       const averageRemissions = remissions / weekCount;
-      const pendingReports = pendingReportCountForLocation(
-        sender,
-        reportingStartDate,
-        mandatoryTypesForLocation(sender),
-      );
+      const pendingReportSummary = pendingReportCounts[sender.id];
+      const pendingReportDetails =
+        pendingReportDetailsByLocation[sender.id] ||
+        pendingReportSummary?.pending ||
+        [];
+      const pendingReports =
+        pendingReportSummary?.count ?? (pendingReportCountLoading ? "..." : 0);
+      const hasPendingReports =
+        typeof pendingReports === "number" && pendingReports > 0;
       const scheduleDateRange = reportCardsScheduleDateRange(reports);
       return {
         location: sender,
@@ -7269,6 +7358,8 @@ export function LocationDetailPage() {
         approved,
         pending,
         pendingReports,
+        hasPendingReports,
+        pendingReportDetails,
         attendance,
         collections,
         remissions,
@@ -7403,13 +7494,15 @@ export function LocationDetailPage() {
   }: {
     icon: ReactNode;
     label: string;
-    value: number;
+    value: number | string;
   }) => (
     <ListItem
       disableGutters
       secondaryAction={
         <Typography variant="body2">
-          {value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+          {typeof value === "number"
+            ? value.toLocaleString(undefined, { maximumFractionDigits: 1 })
+            : value}
         </Typography>
       }
       sx={{
@@ -8076,8 +8169,10 @@ export function LocationDetailPage() {
       </Menu>
       <Stack
         direction="row"
+        spacing={1.25}
         sx={{
           display: { xs: "flex", md: "none" },
+          alignItems: "center",
           justifyContent: "flex-end",
           mb: 2,
         }}
@@ -10588,7 +10683,12 @@ export function LocationDetailPage() {
                               >
                                 <Paper
                                   variant="outlined"
-                                  sx={{ p: 2, height: "100%" }}
+                                  sx={{
+                                    p: 2,
+                                    pb: item.hasPendingReports ? 5 : 2,
+                                    height: "100%",
+                                    position: "relative",
+                                  }}
                                 >
                                   <Typography
                                     variant="subtitle1"
@@ -10680,6 +10780,36 @@ export function LocationDetailPage() {
                                       value={item.averageRemissions}
                                     />
                                   </List>
+                                  {item.hasPendingReports ? (
+                                    <Tooltip title="Pending report schedules">
+                                      <IconButton
+                                        aria-label={`Pending report schedules for ${
+                                          item.location.title ||
+                                          `Location #${item.location.id}`
+                                        }`}
+                                        color="warning"
+                                        size="small"
+                                        onClick={() =>
+                                          void openPendingReportDetails(
+                                            item.location,
+                                          )
+                                        }
+                                        sx={{
+                                          position: "absolute",
+                                          right: 10,
+                                          bottom: 10,
+                                          border: 1,
+                                          borderColor: "divider",
+                                          bgcolor: "background.paper",
+                                          "&:hover": {
+                                            bgcolor: "action.hover",
+                                          },
+                                        }}
+                                      >
+                                        <HelpOutlinedIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  ) : null}
                                 </Paper>
                               </Grid>
                             ))}
@@ -10723,42 +10853,40 @@ export function LocationDetailPage() {
                                 )}
                               </PDFDownloadLink>
                             </Box>
-                            <Box
-                              sx={{
-                                height: {
-                                  xs: "calc(100dvh - 220px)",
-                                  sm: 560,
-                                  md: 680,
-                                },
-                                minHeight: { xs: 460, sm: 520 },
-                                border: 1,
-                                borderColor: "divider",
-                                borderRadius: 1,
-                                overflow: "hidden",
-                              }}
-                            >
-                              <PDFViewer
-                                width="100%"
-                                height="100%"
-                                style={{
-                                  border: 0,
-                                  width: "100%",
-                                  height: "100%",
+                            {!isMobilePdfPreview ? (
+                              <Box
+                                sx={{
+                                  height: { sm: 560, md: 680 },
+                                  minHeight: { sm: 520 },
+                                  border: 1,
+                                  borderColor: "divider",
+                                  borderRadius: 1,
+                                  overflow: "hidden",
                                 }}
                               >
-                                <ReceivedReportsDocument
-                                  title={receivedReportsPdfTitle}
-                                  locationTitle={location.title}
-                                  collectionColumns={
-                                    receivedReportCollectionColumns
-                                  }
-                                  remissionColumns={
-                                    receivedReportRemissionColumns
-                                  }
-                                  rows={receivedReportPdfRows}
-                                />
-                              </PDFViewer>
-                            </Box>
+                                <PDFViewer
+                                  width="100%"
+                                  height="100%"
+                                  style={{
+                                    border: 0,
+                                    width: "100%",
+                                    height: "100%",
+                                  }}
+                                >
+                                  <ReceivedReportsDocument
+                                    title={receivedReportsPdfTitle}
+                                    locationTitle={location.title}
+                                    collectionColumns={
+                                      receivedReportCollectionColumns
+                                    }
+                                    remissionColumns={
+                                      receivedReportRemissionColumns
+                                    }
+                                    rows={receivedReportPdfRows}
+                                  />
+                                </PDFViewer>
+                              </Box>
+                            ) : null}
                           </Stack>
                         )
                       ) : null}
@@ -11069,6 +11197,88 @@ export function LocationDetailPage() {
           </Paper>
         </Grid>
       </Grid>
+      <Dialog
+        open={Boolean(pendingReportDetailsDialog)}
+        onClose={() => setPendingReportDetailsDialog(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {pendingReportDetailsDialog?.locationTitle || "Location"} Pending
+          Reports
+        </DialogTitle>
+        <DialogContent>
+          {pendingReportDetailsDialog?.loading ? (
+            <Stack
+              direction="row"
+              spacing={1.25}
+              sx={{ alignItems: "center", py: 2 }}
+            >
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                Loading pending report schedules...
+              </Typography>
+            </Stack>
+          ) : pendingReportDetailsDialog?.pending.length ? (
+            <List
+              dense
+              disablePadding
+              sx={{
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1,
+                mt: 1,
+                overflow: "hidden",
+              }}
+            >
+              {pendingReportDetailsDialog.pending.map((pendingItem, index) => (
+                <ListItem
+                  key={`${pendingItem.scheduleDate}-${pendingItem.scheduleType}-${
+                    pendingItem.scheduleId || index
+                  }`}
+                  divider={
+                    index < pendingReportDetailsDialog.pending.length - 1
+                  }
+                  sx={{ py: 1 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 34 }}>
+                    <CancelOutlinedIcon color="error" fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={`${pendingItem.scheduleDate} - ${pendingItem.scheduleType}`}
+                    secondary={
+                      [pendingItem.scheduleTitle, pendingItem.recurrence]
+                        .filter(Boolean)
+                        .join(" - ") || undefined
+                    }
+                    slotProps={{
+                      primary: {
+                        variant: "body2",
+                        sx: { fontWeight: 700 },
+                      },
+                      secondary: { variant: "caption" },
+                    }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <EmptyState
+              title="No pending reports"
+              message="This location has no pending report schedules."
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="secondary"
+            variant="contained"
+            onClick={() => setPendingReportDetailsDialog(null)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={reportDateFilterOpen}
         onClose={() => setReportDateFilterOpen(false)}
@@ -14364,6 +14574,8 @@ export function CashbookActionsMenu({
     enddate: cashbook.enddate || "",
     opening_balance: String(cashbook.opening_balance || 0),
   });
+  const theme = useTheme();
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
   const closeMenu = () => {
     setAnchorEl(null);
@@ -14817,54 +15029,52 @@ export function CashbookActionsMenu({
                   )}
                 </PDFDownloadLink>
               </Box>
-              <Box
-                sx={{
-                  height: {
-                    xs: "calc(100dvh - 220px)",
-                    sm: 560,
-                    md: 680,
-                  },
-                  minHeight: { xs: 460, sm: 520 },
-                  border: 1,
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  overflow: "hidden",
-                }}
-              >
-                {reportLoading ? (
-                  <Box
-                    sx={{
-                      height: "100%",
-                      display: "grid",
-                      placeItems: "center",
-                    }}
-                  >
-                    <CircularProgress />
-                  </Box>
-                ) : (
-                  <PDFViewer
-                    width="100%"
-                    height="100%"
-                    style={{
-                      border: 0,
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <CashbookTransactionsReportDocument
-                      cashbook={activeReportCashbook}
-                      reportType={reportType}
-                      startDate={reportFilters.startDate}
-                      endDate={reportFilters.endDate}
-                      particularLabel={
-                        selectedReportParticular?.title || undefined
-                      }
-                      rows={reportRows}
-                      title={reportPdfTitle}
-                    />
-                  </PDFViewer>
-                )}
-              </Box>
+              {!isMobilePdfPreview ? (
+                <Box
+                  sx={{
+                    height: { sm: 560, md: 680 },
+                    minHeight: { sm: 520 },
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  {reportLoading ? (
+                    <Box
+                      sx={{
+                        height: "100%",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <CircularProgress />
+                    </Box>
+                  ) : (
+                    <PDFViewer
+                      width="100%"
+                      height="100%"
+                      style={{
+                        border: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <CashbookTransactionsReportDocument
+                        cashbook={activeReportCashbook}
+                        reportType={reportType}
+                        startDate={reportFilters.startDate}
+                        endDate={reportFilters.endDate}
+                        particularLabel={
+                          selectedReportParticular?.title || undefined
+                        }
+                        rows={reportRows}
+                        title={reportPdfTitle}
+                      />
+                    </PDFViewer>
+                  )}
+                </Box>
+              ) : null}
             </Stack>
           </LocalizationProvider>
         </DialogContent>
@@ -16560,6 +16770,8 @@ export function CashbookDetailPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const account = getSessionAccount();
+  const theme = useTheme();
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
   const {
     data: cashbook,
     setData: setCashbook,
@@ -19140,54 +19352,52 @@ export function CashbookDetailPage() {
                   )}
                 </PDFDownloadLink>
               </Box>
-              <Box
-                sx={{
-                  height: {
-                    xs: "calc(100dvh - 220px)",
-                    sm: 560,
-                    md: 680,
-                  },
-                  minHeight: { xs: 460, sm: 520 },
-                  border: 1,
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  overflow: "hidden",
-                }}
-              >
-                {cashbookReportLoading ? (
-                  <Box
-                    sx={{
-                      height: "100%",
-                      display: "grid",
-                      placeItems: "center",
-                    }}
-                  >
-                    <CircularProgress />
-                  </Box>
-                ) : (
-                  <PDFViewer
-                    width="100%"
-                    height="100%"
-                    style={{
-                      border: 0,
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <CashbookTransactionsReportDocument
-                      cashbook={cashbook}
-                      reportType={cashbookReportType}
-                      startDate={cashbookReportFilters.startDate}
-                      endDate={cashbookReportFilters.endDate}
-                      particularLabel={
-                        selectedCashbookReportParticular?.title || undefined
-                      }
-                      rows={cashbookReportRows}
-                      title={cashbookReportPdfTitle}
-                    />
-                  </PDFViewer>
-                )}
-              </Box>
+              {!isMobilePdfPreview ? (
+                <Box
+                  sx={{
+                    height: { sm: 560, md: 680 },
+                    minHeight: { sm: 520 },
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  {cashbookReportLoading ? (
+                    <Box
+                      sx={{
+                        height: "100%",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <CircularProgress />
+                    </Box>
+                  ) : (
+                    <PDFViewer
+                      width="100%"
+                      height="100%"
+                      style={{
+                        border: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <CashbookTransactionsReportDocument
+                        cashbook={cashbook}
+                        reportType={cashbookReportType}
+                        startDate={cashbookReportFilters.startDate}
+                        endDate={cashbookReportFilters.endDate}
+                        particularLabel={
+                          selectedCashbookReportParticular?.title || undefined
+                        }
+                        rows={cashbookReportRows}
+                        title={cashbookReportPdfTitle}
+                      />
+                    </PDFViewer>
+                  )}
+                </Box>
+              ) : null}
             </Stack>
           </LocalizationProvider>
         </DialogContent>

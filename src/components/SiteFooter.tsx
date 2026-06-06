@@ -24,7 +24,7 @@ export function SiteFooter({ contained = true }: SiteFooterProps) {
         sx={{ alignItems: "center", flexWrap: "wrap" }}
       >
         <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.76)" }}>
-          © {currentYear} JELMOH
+          © {currentYear} JELMOH Systems. All rights reserved.
         </Typography>
         <IconButton
           size="small"
