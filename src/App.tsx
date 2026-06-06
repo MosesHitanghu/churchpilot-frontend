@@ -62,7 +62,16 @@ function App({ themeMode, onToggleTheme }: AppProps) {
   return (
     <Suspense fallback={<LoadingState minHeight="100vh" />}>
       <Routes>
-      <Route path="/" element={<LandingPage onAuthenticated={setAccount} />} />
+      <Route
+        path="/"
+        element={
+          account ? (
+            <Navigate to="/app" replace />
+          ) : (
+            <LandingPage onAuthenticated={setAccount} />
+          )
+        }
+      />
       <Route path="/admin" element={<AdminDashboardPage />} />
       <Route path="/login" element={<LandingPage onAuthenticated={setAccount} initialAuthMode="login" />} />
       <Route path="/signup" element={<LandingPage onAuthenticated={setAccount} initialAuthMode="signup" />} />
