@@ -339,11 +339,6 @@ export function AllCashBooks({ account }: AllCashBooksProps) {
                           }
                           label={cashbook.status || "Active"}
                         />
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={cashbook.visibility || "Public"}
-                        />
                         <Button
                           size="small"
                           variant="text"

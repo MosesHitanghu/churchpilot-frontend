@@ -2299,7 +2299,7 @@ export function LocationDetailPage() {
     image: string;
   } | null>(null);
   const [forwardProofAttachment, setForwardProofAttachment] = useState("");
-  const [forwardProofFileName, setForwardProofFileName] = useState("");
+  const [, setForwardProofFileName] = useState("");
   const [forwardReportError, setForwardReportError] = useState("");
   const [forwardReportSaving, setForwardReportSaving] = useState(false);
   const [reportEditOpen, setReportEditOpen] = useState(false);
@@ -4506,7 +4506,7 @@ export function LocationDetailPage() {
     setForwardReportError(
       automaticReportReceiver || location?.is_hq
         ? ""
-        : "Set a report receiver in report settings before forwarding.",
+        : "No parent or HQ location was found for this report.",
     );
     setForwardReportOpen(true);
   };
@@ -6489,16 +6489,6 @@ export function LocationDetailPage() {
           index,
     );
   const automaticReportReceiver = (() => {
-    const configuredReceiverId =
-      reportSettingsForm.report_receiver_location_id ||
-      location.report_receiver_location_id;
-    if (configuredReceiverId) {
-      return (
-        reportReceiverOptions.find((item) =>
-          idsEqual(item.id, configuredReceiverId),
-        ) || null
-      );
-    }
     if (location.is_hq) {
       return null;
     }
@@ -8748,11 +8738,6 @@ export function LocationDetailPage() {
                                         : "secondary"
                                     }
                                     label={cashbook.status || "Active"}
-                                  />
-                                  <Chip
-                                    size="small"
-                                    variant="outlined"
-                                    label={cashbook.visibility || "Public"}
                                   />
                                   <Button
                                     size="small"
@@ -11569,7 +11554,7 @@ export function LocationDetailPage() {
         <DialogTitle>
           {idsEqual(forwardTargetLocationId, location.id)
             ? "Save Aggregated Report"
-            : "Forward Aggregated Report"}
+            : "Report Summary"}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -11577,51 +11562,69 @@ export function LocationDetailPage() {
               <Alert severity="error">{forwardReportError}</Alert>
             ) : null}
             {forwardReportCard ? (
-              <Alert severity="info">
-                {forwardReportCard.scheduleDate} -{" "}
-                {forwardReportCard.scheduleTypes.join(", ") || "General"} -
-                Total attendance{" "}
-                {forwardReportCard.attendanceTotal.toLocaleString()},
-                collections{" "}
-                {forwardReportCard.particularsTotal.toLocaleString()},
-                remissions {forwardReportCard.remissionsTotal.toLocaleString()}.
-              </Alert>
-            ) : null}
-            {isHqSelfSaveWithoutReceiver ? (
-              <>
-                <Alert severity="info">
-                  There is no Church Set to Recieve your report, so the report
-                  will be saved.
-                </Alert>
-                <Alert severity="warning">
-                  Choose the church to receive reports in settings.
-                </Alert>
-              </>
-            ) : (
-              <Alert
-                severity={
-                  idsEqual(forwardTargetLocationId, location.id) ||
-                  automaticReportReceiver
-                    ? "info"
-                    : "warning"
-                }
-              >
-                Receiving location: {forwardReceivingLocationLabel}
-              </Alert>
-            )}
-            {!idsEqual(forwardTargetLocationId, location.id) ? (
-              <Button variant="outlined" component="label">
-                {forwardProofFileName || "Add Screenshot Proof"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(event) => {
-                    void handleForwardProofChange(event.target.files?.[0]);
-                    event.target.value = "";
-                  }}
-                />
-              </Button>
+              <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                <List disablePadding>
+                  {[
+                    {
+                      label: "Date",
+                      value: forwardReportCard.scheduleDate,
+                    },
+                    {
+                      label: "Type",
+                      value:
+                        forwardReportCard.scheduleTypes.join(", ") ||
+                        "General",
+                    },
+                    {
+                      label: "Attendance",
+                      value: forwardReportCard.attendanceTotal.toLocaleString(),
+                    },
+                    {
+                      label: "Collections",
+                      value: forwardReportCard.particularsTotal.toLocaleString(),
+                    },
+                    {
+                      label: "Remissions",
+                      value: forwardReportCard.remissionsTotal.toLocaleString(),
+                    },
+                  ].map((item, index) => (
+                    <ListItem
+                      key={item.label}
+                      secondaryAction={
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: "text.primary",
+                            fontWeight: 700,
+                            textAlign: "right",
+                          }}
+                        >
+                          {item.value}
+                        </Typography>
+                      }
+                      sx={{
+                        borderBottom: index === 4 ? 0 : "1px solid",
+                        borderColor: "divider",
+                        py: 1.25,
+                        pr: 16,
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        <CheckCircleIcon color="secondary" fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.label}
+                        slotProps={{
+                          primary: {
+                            color: "text.secondary",
+                            variant: "body2",
+                          },
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
             ) : null}
             {isHqSelfSaveWithoutReceiver ? (
               <Button
@@ -11647,6 +11650,40 @@ export function LocationDetailPage() {
                 }}
               />
             ) : null}
+            {!idsEqual(forwardTargetLocationId, location.id) ? (
+              <Button
+                variant="outlined"
+                component="label"
+                sx={{ alignSelf: "flex-start" }}
+              >
+                {forwardProofAttachment ? "Change" : "Add Screenshot Proof"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => {
+                    void handleForwardProofChange(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </Button>
+            ) : null}
+            {isHqSelfSaveWithoutReceiver ? (
+              <Alert severity="info">
+                Sending to: {location.title || "HQ location"}
+              </Alert>
+            ) : (
+              <Alert
+                severity={
+                  idsEqual(forwardTargetLocationId, location.id) ||
+                  automaticReportReceiver
+                    ? "info"
+                    : "warning"
+                }
+              >
+                Sending to: {forwardReceivingLocationLabel}
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -14731,7 +14768,7 @@ export function CashbookActionsMenu({
             </ListItem>
             <ListItem disableGutters divider>
               <ListItemText
-                primary="OB"
+                primary="Opening"
                 secondary={Number(
                   cashbook.opening_balance || 0,
                 ).toLocaleString()}
@@ -14739,7 +14776,7 @@ export function CashbookActionsMenu({
             </ListItem>
             <ListItem disableGutters divider>
               <ListItemText
-                primary="CB"
+                primary="Closing"
                 secondary={
                   (cashbook.status || "").toLowerCase() === "closed"
                     ? Number(cashbook.closing_balance || 0).toLocaleString()
