@@ -81,10 +81,8 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useMediaQuery,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { useTheme } from "@mui/material/styles";
 import {
   DataGrid,
   type GridColDef,
@@ -2095,8 +2093,6 @@ function ScheduleCalendar({
 }
 
 export function LocationDetailPage() {
-  const muiTheme = useTheme();
-  const isDesktop = useMediaQuery(muiTheme.breakpoints.up("md"));
   const { locationId } = useParams();
   const {
     data: location,
@@ -2301,6 +2297,7 @@ export function LocationDetailPage() {
   const [forwardProofAttachment, setForwardProofAttachment] = useState("");
   const [, setForwardProofFileName] = useState("");
   const [forwardReportError, setForwardReportError] = useState("");
+  const [forwardReportSuccess, setForwardReportSuccess] = useState("");
   const [forwardReportSaving, setForwardReportSaving] = useState(false);
   const [reportEditOpen, setReportEditOpen] = useState(false);
   const [reportEditCard, setReportEditCard] =
@@ -2323,6 +2320,7 @@ export function LocationDetailPage() {
   const [reportSaving, setReportSaving] = useState(false);
   const [reportError, setReportError] = useState("");
   const [reportSuccess, setReportSuccess] = useState("");
+  const [reportSaved, setReportSaved] = useState(false);
   const [financialReportMenuAnchor, setFinancialReportMenuAnchor] =
     useState<null | HTMLElement>(null);
   const [selectedFinancialReport] = useState<LocationReport | null>(null);
@@ -3439,11 +3437,13 @@ export function LocationDetailPage() {
     });
     setReportError("");
     setReportSuccess("");
+    setReportSaved(false);
     setReportCreateOpen(true);
   };
 
   const updateReportForm = (value: Partial<ReportForm>) => {
     setReportForm((current) => ({ ...current, ...value }));
+    setReportSaved(false);
   };
 
   const openReportCardMenu = (
@@ -3760,6 +3760,7 @@ export function LocationDetailPage() {
   );
   const reportCreateDisabled =
     reportSaving ||
+    reportSaved ||
     !reportForm.title.trim() ||
     !reportForm.schedule_date ||
     !reportForm.schedule_type ||
@@ -3905,6 +3906,7 @@ export function LocationDetailPage() {
     setReportSaving(true);
     setReportError("");
     setReportSuccess("");
+    setReportSaved(false);
     try {
       if (reportForm.type === "Financial" && !collectionReportRows.length) {
         setReportError(
@@ -3964,18 +3966,19 @@ export function LocationDetailPage() {
       await loadRelatedRecords(["reports"]);
       setSelectedReportMenu("Local");
       setReportsView("cards");
-      setReportSuccess(
-        existingCard
-          ? "Report updated successfully."
-          : "Report created successfully.",
-      );
+      const message = existingCard
+        ? "Report updated successfully."
+        : "Report created successfully.";
+      setReportSuccess(message);
+      setReportSaved(true);
+      setFeedback({ severity: "success", message });
     } catch (requestError) {
-      setReportError(
-        getApiErrorMessage(
-          requestError,
-          existingCard ? "Failed to update report" : "Failed to create report",
-        ),
+      const message = getApiErrorMessage(
+        requestError,
+        existingCard ? "Failed to update report" : "Failed to create report",
       );
+      setReportError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setReportSaving(false);
     }
@@ -4041,6 +4044,7 @@ export function LocationDetailPage() {
     });
     setReportError("");
     setReportSuccess("");
+    setReportSaved(false);
     setReportCreateOpen(false);
     setReportEditOpen(true);
   };
@@ -4503,6 +4507,7 @@ export function LocationDetailPage() {
     );
     setForwardProofAttachment("");
     setForwardProofFileName("");
+    setForwardReportSuccess("");
     setForwardReportError(
       automaticReportReceiver || location?.is_hq
         ? ""
@@ -4513,6 +4518,7 @@ export function LocationDetailPage() {
 
   const handleForwardProofChange = async (file?: File) => {
     setForwardReportError("");
+    setForwardReportSuccess("");
     if (!file) {
       setForwardProofAttachment("");
       setForwardProofFileName("");
@@ -4543,6 +4549,7 @@ export function LocationDetailPage() {
     }
     setForwardReportSaving(true);
     setForwardReportError("");
+    setForwardReportSuccess("");
     try {
       await api.post<ForwardedLocationReport>("/forwarded-location-reports", {
         requester_id: account.id,
@@ -4604,12 +4611,19 @@ export function LocationDetailPage() {
         screenshop_attachment: forwardProofAttachment || null,
         report_type: forwardReportCard.scheduleTypes.join(", ") || "General",
       });
-      setForwardReportOpen(false);
       await loadRelatedRecords();
+      const message = isSelfSave
+        ? "Report saved successfully."
+        : "Report forwarded successfully.";
+      setForwardReportSuccess(message);
+      setFeedback({ severity: "success", message });
     } catch (requestError) {
-      setForwardReportError(
-        getApiErrorMessage(requestError, "Failed to forward report"),
+      const message = getApiErrorMessage(
+        requestError,
+        "Failed to forward report",
       );
+      setForwardReportError(message);
+      setFeedback({ severity: "error", message });
     } finally {
       setForwardReportSaving(false);
     }
@@ -11561,6 +11575,9 @@ export function LocationDetailPage() {
             {forwardReportError ? (
               <Alert severity="error">{forwardReportError}</Alert>
             ) : null}
+            {forwardReportSuccess ? (
+              <Alert severity="success">{forwardReportSuccess}</Alert>
+            ) : null}
             {forwardReportCard ? (
               <Paper variant="outlined" sx={{ overflow: "hidden" }}>
                 <List disablePadding>
@@ -11630,10 +11647,14 @@ export function LocationDetailPage() {
               <Button
                 variant="contained"
                 onClick={forwardLocationReport}
-                disabled={forwardReportSaving || !forwardTargetLocationId}
+                disabled={
+                  forwardReportSaving ||
+                  Boolean(forwardReportSuccess) ||
+                  !forwardTargetLocationId
+                }
                 sx={{ alignSelf: "flex-start" }}
               >
-                {forwardReportSaving ? "Saving..." : "Save"}
+                {forwardReportSaving ? "Forwarding..." : "Save"}
               </Button>
             ) : null}
             {forwardProofAttachment ? (
@@ -11699,13 +11720,14 @@ export function LocationDetailPage() {
               onClick={forwardLocationReport}
               disabled={
                 forwardReportSaving ||
+                Boolean(forwardReportSuccess) ||
                 !forwardTargetLocationId ||
                 (!idsEqual(forwardTargetLocationId, location.id) &&
                   !forwardProofAttachment)
               }
             >
               {forwardReportSaving
-                ? "Saving..."
+                ? "Forwarding..."
                 : idsEqual(forwardTargetLocationId, location.id)
                   ? "Save"
                   : "Forward"}
@@ -13318,7 +13340,7 @@ export function LocationDetailPage() {
                         }
                         slots={{ day: renderReportScheduleAwareDay }}
                         slotProps={{
-                          textField: { fullWidth: true, size: "small" },
+                          textField: { fullWidth: true, size: "medium" },
                         }}
                       />
                       <TextField
@@ -13411,7 +13433,7 @@ export function LocationDetailPage() {
                           textField: {
                             fullWidth: true,
                             required: true,
-                            size: "small",
+                            size: "medium",
                           },
                         }}
                       />
@@ -14134,7 +14156,7 @@ export function LocationDetailPage() {
         onClose={() => setFeedback(null)}
         anchorOrigin={{
           vertical: "bottom",
-          horizontal: isDesktop ? "right" : "center",
+          horizontal: "right",
         }}
       >
         {feedback ? (
