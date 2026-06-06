@@ -102,6 +102,7 @@ import type { SchedulerEvent } from "@mui/x-scheduler/models";
 import {
   Document,
   Page,
+  PDFDownloadLink,
   PDFViewer,
   StyleSheet,
   Text,
@@ -534,6 +535,7 @@ function CashbookTransactionsReportDocument({
   endDate,
   particularLabel,
   rows,
+  title,
 }: {
   cashbook: Cashbook;
   reportType: CashbookTransactionReportType;
@@ -541,13 +543,17 @@ function CashbookTransactionsReportDocument({
   endDate: string;
   particularLabel?: string;
   rows: CashbookTransactionReportRow[];
+  title?: string;
 }) {
   const totalIncome = rows.reduce((sum, row) => sum + row.income, 0);
   const totalExpenditure = rows.reduce((sum, row) => sum + row.expenditure, 0);
   const openingBalance = Number(cashbook.opening_balance || 0);
   const finalBalance = rows.at(-1)?.balance ?? openingBalance;
+  const documentTitle =
+    title ||
+    `${cashbook.title || "Cashbook"} ${cashbookReportLabels[reportType]} Report`;
   return (
-    <Document>
+    <Document title={documentTitle}>
       <Page size="A4" style={cashbookReportStyles.page}>
         <Text style={cashbookReportStyles.title}>
           {cashbook.title || "Cashbook"} - {cashbookReportLabels[reportType]}
@@ -818,7 +824,7 @@ function ReceivedReportsDocument({
     return "";
   };
   return (
-    <Document>
+    <Document title={title}>
       <Page size="A4" orientation="landscape" style={cashbookReportStyles.page}>
         <Text style={cashbookReportStyles.title}>{title}</Text>
         <Text style={cashbookReportStyles.subtitle}>
@@ -904,6 +910,10 @@ function safeExportFileName(value: string) {
       .replace(/^-+|-+$/g, "")
       .toLowerCase() || "cashbook-report"
   );
+}
+
+function pdfFileName(title: string) {
+  return `${safeExportFileName(title)}.pdf`;
 }
 
 function columnName(index: number) {
@@ -2162,6 +2172,7 @@ export function LocationDetailPage() {
     description: "",
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [ministrySchedules, setMinistrySchedules] = useState<Schedule[]>([]);
   const [locationTransactions, setLocationTransactions] = useState<
     Transaction[]
   >([]);
@@ -2176,9 +2187,6 @@ export function LocationDetailPage() {
     ForwardedLocationReport[]
   >([]);
   const [forwardedReports, setForwardedReports] = useState<
-    ForwardedLocationReport[]
-  >([]);
-  const [ministryForwardedReports, setMinistryForwardedReports] = useState<
     ForwardedLocationReport[]
   >([]);
   const [locationRemissions, setLocationRemissions] = useState<
@@ -2569,11 +2577,11 @@ export function LocationDetailPage() {
     setEvents([]);
     setRoles([]);
     setSchedules([]);
+    setMinistrySchedules([]);
     setBranches([]);
     setLocationReports([]);
     setReceivedReports([]);
     setForwardedReports([]);
-    setMinistryForwardedReports([]);
     setLocationTransactions([]);
     setLocationParticulars([]);
     setLocationRemissions([]);
@@ -2585,7 +2593,6 @@ export function LocationDetailPage() {
       return Promise.resolve();
     }
     const requestLocationId = locationId;
-    const requestOwnerId = location.owner_id;
     if (!idsEqual(location.id, requestLocationId)) {
       return Promise.resolve();
     }
@@ -2751,15 +2758,6 @@ export function LocationDetailPage() {
         ).then(applyResponse(setForwardedReports)),
       );
       jobs.push(
-        (requestOwnerId
-          ? safeGet<ForwardedLocationReport[]>(
-              `/forwarded-location-reports?ministry_owner_id=${requestOwnerId}`,
-              [],
-            )
-          : Promise.resolve({ data: [] as ForwardedLocationReport[] })
-        ).then(applyResponse(setMinistryForwardedReports)),
-      );
-      jobs.push(
         safeGet<MfAttendance[]>(
           `/mf-attendances?location_id=${requestLocationId}${account ? `&requester_id=${account.id}` : ""}`,
           [],
@@ -2894,19 +2892,23 @@ export function LocationDetailPage() {
     if (!location?.owner_id) {
       setMinistryLocations([]);
       setMinistryMembers([]);
+      setMinistrySchedules([]);
       return;
     }
     Promise.all([
       api.get<Location[]>(`/locations?owner_id=${location.owner_id}`),
       api.get<Member[]>(`/members?owner_id=${location.owner_id}`),
+      api.get<Schedule[]>(`/schedules?owner_id=${location.owner_id}`),
     ])
-      .then(([locationsResponse, membersResponse]) => {
+      .then(([locationsResponse, membersResponse, schedulesResponse]) => {
         setMinistryLocations(locationsResponse.data);
         setMinistryMembers(membersResponse.data);
+        setMinistrySchedules(schedulesResponse.data);
       })
       .catch(() => {
         setMinistryLocations([]);
         setMinistryMembers([]);
+        setMinistrySchedules([]);
       });
   }, [location?.owner_id]);
 
@@ -6625,6 +6627,21 @@ export function LocationDetailPage() {
       return {};
     }
   };
+  const forwardedReportDetailScheduleDate = (
+    report: ForwardedLocationReport,
+  ) => {
+    const details = parseForwardedDetails(report);
+    const detailDate =
+      typeof details.scheduleDate === "string" ? details.scheduleDate : "";
+    return detailDate && dayjs(detailDate).isValid()
+      ? dayjs(detailDate).format("YYYY-MM-DD")
+      : "";
+  };
+  const reportSchedulePool = [...schedules, ...ministrySchedules].filter(
+    (schedule, index, list) =>
+      list.findIndex((candidate) => idsEqual(candidate.id, schedule.id)) ===
+      index,
+  );
   const financialReportTransactions = (
     report: LocationReport,
     scheduleDate: string,
@@ -6957,7 +6974,7 @@ export function LocationDetailPage() {
   const localReportCards = [...localSavedReportCards, ...localDraftReportCards];
   const allMinistryReportCards: AggregatedReportCard[] = [
     ...localSavedReportCards,
-    ...forwardedReportsToCards(ministryForwardedReports).filter(
+    ...receivedReportCards.filter(
       (card) =>
         !idsEqual(card.forwardedReport?.source_location_id, location.id),
     ),
@@ -7133,12 +7150,19 @@ export function LocationDetailPage() {
     (scheduleDate === today() &&
       Boolean(schedule.time) &&
       schedule.time! <= dayjs().format("HH:mm:ss"));
+  const forwardedReportRecords = [
+    ...forwardedReports,
+    ...receivedReports,
+  ].filter(
+    (report, index, reports) =>
+      reports.findIndex((candidate) => candidate.id === report.id) === index,
+  );
   const pendingReportCountForLocation = (
     sender: Location,
     reportingStartDate: string,
     mandatoryTypes: string[],
   ) => {
-    const effectiveStartDate = reportFilters.startDate || reportingStartDate;
+    const effectiveStartDate = reportingStartDate;
     if (!effectiveStartDate) {
       return 0;
     }
@@ -7151,28 +7175,41 @@ export function LocationDetailPage() {
       return 0;
     }
 
-    const reportWindowEnd =
-      reportFilters.endDate && dayjs(reportFilters.endDate).isValid()
-        ? dayjs(reportFilters.endDate)
-        : dayjs();
-    const senderSchedules = schedules.filter(
+    const reportWindowEnd = dayjs().startOf("day");
+    const senderSchedules = reportSchedulePool.filter(
       (schedule) =>
         idsEqual(schedule.location_id, sender.id) &&
         mandatoryTypes.includes(schedule.type || "") &&
-        (schedule.report_status || "Pending").toLowerCase() !== "reported",
+        schedule.recurrence === "Weekly" &&
+        schedule.weekday != null,
+    );
+    const reportedScheduleDates = new Set(
+      forwardedReportRecords
+        .filter(
+          (report) =>
+            idsEqual(report.source_location_id, sender.id) &&
+            (report.status === "Pending" || report.status === "Approved"),
+        )
+        .map(forwardedReportDetailScheduleDate)
+        .filter(Boolean),
     );
 
     const pendingDates = new Set<string>();
     senderSchedules.forEach((schedule) => {
-      occurrenceDates(schedule, reportWindowEnd, effectiveStartDate)
-        .map((occurrence) => occurrence.format("YYYY-MM-DD"))
-        .filter(
-          (scheduleDate) =>
-            dayjs(scheduleDate).isAfter(reportWindowStart, "day") &&
-            !dayjs(scheduleDate).isAfter(reportWindowEnd, "day") &&
-            isDueReportScheduleDate(schedule, scheduleDate),
-        )
-        .forEach((scheduleDate) => pendingDates.add(scheduleDate));
+      let current = reportWindowStart.day(Number(schedule.weekday));
+      if (current.isBefore(reportWindowStart, "day")) {
+        current = current.add(1, "week");
+      }
+      while (!current.isAfter(reportWindowEnd, "day")) {
+        const scheduleDate = current.format("YYYY-MM-DD");
+        if (
+          isDueReportScheduleDate(schedule, scheduleDate) &&
+          !reportedScheduleDates.has(scheduleDate)
+        ) {
+          pendingDates.add(scheduleDate);
+        }
+        current = current.add(1, "week");
+      }
     });
     return pendingDates.size;
   };
@@ -7322,6 +7359,13 @@ export function LocationDetailPage() {
         : selectedReportMenu === receivedReportMenuOption
           ? "Received Reports"
           : "Reports";
+  const receivedReportsPdfTitle = [
+    location.title || "Location",
+    activeReportsTitle,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+  const receivedReportsPdfFileName = pdfFileName(receivedReportsPdfTitle);
   const activeReportsView =
     selectedReportMenu === allMinistryReportsMenuOption
       ? "report"
@@ -10649,33 +10693,73 @@ export function LocationDetailPage() {
                             message="The report preview will appear after reports are available."
                           />
                         ) : (
-                          <Box
-                            sx={{
-                              height: { xs: 520, md: 680 },
-                              border: 1,
-                              borderColor: "divider",
-                              borderRadius: 1,
-                              overflow: "hidden",
-                            }}
-                          >
-                            <PDFViewer
-                              width="100%"
-                              height="100%"
-                              style={{ border: 0 }}
+                          <Stack spacing={1.5}>
+                            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                              <PDFDownloadLink
+                                document={
+                                  <ReceivedReportsDocument
+                                    title={receivedReportsPdfTitle}
+                                    locationTitle={location.title}
+                                    collectionColumns={
+                                      receivedReportCollectionColumns
+                                    }
+                                    remissionColumns={
+                                      receivedReportRemissionColumns
+                                    }
+                                    rows={receivedReportPdfRows}
+                                  />
+                                }
+                                fileName={receivedReportsPdfFileName}
+                                style={{ textDecoration: "none" }}
+                              >
+                                {({ loading }) => (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={loading}
+                                  >
+                                    {loading ? "Preparing PDF..." : "Download PDF"}
+                                  </Button>
+                                )}
+                              </PDFDownloadLink>
+                            </Box>
+                            <Box
+                              sx={{
+                                height: {
+                                  xs: "calc(100dvh - 220px)",
+                                  sm: 560,
+                                  md: 680,
+                                },
+                                minHeight: { xs: 460, sm: 520 },
+                                border: 1,
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                overflow: "hidden",
+                              }}
                             >
-                              <ReceivedReportsDocument
-                                title={activeReportsTitle}
-                                locationTitle={location.title}
-                                collectionColumns={
-                                  receivedReportCollectionColumns
-                                }
-                                remissionColumns={
-                                  receivedReportRemissionColumns
-                                }
-                                rows={receivedReportPdfRows}
-                              />
-                            </PDFViewer>
-                          </Box>
+                              <PDFViewer
+                                width="100%"
+                                height="100%"
+                                style={{
+                                  border: 0,
+                                  width: "100%",
+                                  height: "100%",
+                                }}
+                              >
+                                <ReceivedReportsDocument
+                                  title={receivedReportsPdfTitle}
+                                  locationTitle={location.title}
+                                  collectionColumns={
+                                    receivedReportCollectionColumns
+                                  }
+                                  remissionColumns={
+                                    receivedReportRemissionColumns
+                                  }
+                                  rows={receivedReportPdfRows}
+                                />
+                              </PDFViewer>
+                            </Box>
+                          </Stack>
                         )
                       ) : null}
                     </>
@@ -14349,6 +14433,10 @@ export function CashbookActionsMenu({
   const reportOpeningBalance = Number(
     activeReportCashbook.opening_balance || 0,
   );
+  const reportPdfTitle = `${activeReportCashbook.title || "Cashbook"} - ${
+    cashbookReportLabels[reportType]
+  } Report`;
+  const reportPdfFileName = pdfFileName(reportPdfTitle);
   const reportRows = reportTransactions.reduce<CashbookTransactionReportRow[]>(
     (rows, transaction, index) => {
       const amount = Number(transaction.amount || 0);
@@ -14432,7 +14520,7 @@ export function CashbookActionsMenu({
       .filter(Boolean)
       .join(" ");
     const workbook = createCashbookReportWorkbook({
-      title: `${activeReportCashbook.title || "Cashbook"} - ${cashbookReportLabels[reportType]}`,
+      title: reportPdfTitle,
       subtitle: [activeReportCashbook.location_title, dateRange || "All dates"]
         .filter(Boolean)
         .join(" | "),
@@ -14618,6 +14706,15 @@ export function CashbookActionsMenu({
         onClose={() => setReportOpen(false)}
         fullWidth
         maxWidth="lg"
+        slotProps={{
+          paper: {
+            sx: {
+              height: { xs: "100dvh", sm: "auto" },
+              m: { xs: 0, sm: 2 },
+              maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+            },
+          },
+        }}
       >
         <DialogTitle>{cashbookReportLabels[reportType]} Report</DialogTitle>
         <DialogContent>
@@ -14691,9 +14788,43 @@ export function CashbookActionsMenu({
                   Clear
                 </Button>
               </Stack>
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <PDFDownloadLink
+                  document={
+                    <CashbookTransactionsReportDocument
+                      cashbook={activeReportCashbook}
+                      reportType={reportType}
+                      startDate={reportFilters.startDate}
+                      endDate={reportFilters.endDate}
+                      particularLabel={
+                        selectedReportParticular?.title || undefined
+                      }
+                      rows={reportRows}
+                      title={reportPdfTitle}
+                    />
+                  }
+                  fileName={reportPdfFileName}
+                  style={{ textDecoration: "none" }}
+                >
+                  {({ loading }) => (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={loading || reportLoading}
+                    >
+                      {loading ? "Preparing PDF..." : "Download PDF"}
+                    </Button>
+                  )}
+                </PDFDownloadLink>
+              </Box>
               <Box
                 sx={{
-                  height: { xs: 520, md: 680 },
+                  height: {
+                    xs: "calc(100dvh - 220px)",
+                    sm: 560,
+                    md: 680,
+                  },
+                  minHeight: { xs: 460, sm: 520 },
                   border: 1,
                   borderColor: "divider",
                   borderRadius: 1,
@@ -14711,7 +14842,15 @@ export function CashbookActionsMenu({
                     <CircularProgress />
                   </Box>
                 ) : (
-                  <PDFViewer width="100%" height="100%" style={{ border: 0 }}>
+                  <PDFViewer
+                    width="100%"
+                    height="100%"
+                    style={{
+                      border: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
                     <CashbookTransactionsReportDocument
                       cashbook={activeReportCashbook}
                       reportType={reportType}
@@ -14721,6 +14860,7 @@ export function CashbookActionsMenu({
                         selectedReportParticular?.title || undefined
                       }
                       rows={reportRows}
+                      title={reportPdfTitle}
                     />
                   </PDFViewer>
                 )}
@@ -16812,6 +16952,10 @@ export function CashbookDetailPage() {
     });
     return rows;
   }, []);
+  const cashbookReportPdfTitle = `${cashbook.title || "Cashbook"} - ${
+    cashbookReportLabels[cashbookReportType]
+  } Report`;
+  const cashbookReportPdfFileName = pdfFileName(cashbookReportPdfTitle);
   const exportCashbookReportExcel = () => {
     const totalIncome = cashbookReportRows.reduce(
       (sum, row) => sum + row.income,
@@ -16823,7 +16967,7 @@ export function CashbookDetailPage() {
     );
     const finalBalance =
       cashbookReportRows.at(-1)?.balance ?? cashbookOpeningBalance;
-    const title = `${cashbook.title || "Cashbook"} - ${cashbookReportLabels[cashbookReportType]}`;
+    const title = cashbookReportPdfTitle;
     const dateRange = [
       selectedCashbookReportParticular?.title || null,
       cashbookReportFilters.startDate
@@ -18879,6 +19023,15 @@ export function CashbookDetailPage() {
         onClose={() => setCashbookReportOpen(false)}
         fullWidth
         maxWidth="lg"
+        slotProps={{
+          paper: {
+            sx: {
+              height: { xs: "100dvh", sm: "auto" },
+              m: { xs: 0, sm: 2 },
+              maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+            },
+          },
+        }}
       >
         <DialogTitle>
           {cashbookReportLabels[cashbookReportType]} Report
@@ -18958,9 +19111,43 @@ export function CashbookDetailPage() {
                   Clear
                 </Button>
               </Stack>
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <PDFDownloadLink
+                  document={
+                    <CashbookTransactionsReportDocument
+                      cashbook={cashbook}
+                      reportType={cashbookReportType}
+                      startDate={cashbookReportFilters.startDate}
+                      endDate={cashbookReportFilters.endDate}
+                      particularLabel={
+                        selectedCashbookReportParticular?.title || undefined
+                      }
+                      rows={cashbookReportRows}
+                      title={cashbookReportPdfTitle}
+                    />
+                  }
+                  fileName={cashbookReportPdfFileName}
+                  style={{ textDecoration: "none" }}
+                >
+                  {({ loading }) => (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={loading || cashbookReportLoading}
+                    >
+                      {loading ? "Preparing PDF..." : "Download PDF"}
+                    </Button>
+                  )}
+                </PDFDownloadLink>
+              </Box>
               <Box
                 sx={{
-                  height: { xs: 520, md: 680 },
+                  height: {
+                    xs: "calc(100dvh - 220px)",
+                    sm: 560,
+                    md: 680,
+                  },
+                  minHeight: { xs: 460, sm: 520 },
                   border: 1,
                   borderColor: "divider",
                   borderRadius: 1,
@@ -18978,7 +19165,15 @@ export function CashbookDetailPage() {
                     <CircularProgress />
                   </Box>
                 ) : (
-                  <PDFViewer width="100%" height="100%" style={{ border: 0 }}>
+                  <PDFViewer
+                    width="100%"
+                    height="100%"
+                    style={{
+                      border: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
                     <CashbookTransactionsReportDocument
                       cashbook={cashbook}
                       reportType={cashbookReportType}
@@ -18988,6 +19183,7 @@ export function CashbookDetailPage() {
                         selectedCashbookReportParticular?.title || undefined
                       }
                       rows={cashbookReportRows}
+                      title={cashbookReportPdfTitle}
                     />
                   </PDFViewer>
                 )}
