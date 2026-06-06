@@ -11209,16 +11209,33 @@ export function LocationDetailPage() {
         </DialogTitle>
         <DialogContent>
           {pendingReportDetailsDialog?.loading ? (
-            <Stack
-              direction="row"
-              spacing={1.25}
-              sx={{ alignItems: "center", py: 2 }}
+            <List
+              dense
+              disablePadding
+              sx={{
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1,
+                mt: 1,
+                overflow: "hidden",
+              }}
             >
-              <CircularProgress size={18} />
-              <Typography variant="body2" color="text.secondary">
-                Loading pending report schedules...
-              </Typography>
-            </Stack>
+              {[0, 1, 2, 3].map((item) => (
+                <ListItem
+                  key={item}
+                  divider={item < 3}
+                  sx={{ alignItems: "center", py: 1 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 34 }}>
+                    <Skeleton variant="circular" width={20} height={20} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={<Skeleton variant="text" width="58%" />}
+                    secondary={<Skeleton variant="text" width="36%" />}
+                  />
+                </ListItem>
+              ))}
+            </List>
           ) : pendingReportDetailsDialog?.pending.length ? (
             <List
               dense
