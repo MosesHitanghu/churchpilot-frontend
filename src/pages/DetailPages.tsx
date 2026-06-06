@@ -6031,6 +6031,7 @@ export function LocationDetailPage() {
         sensitivity: "base",
       });
     });
+  const locationsListFetching = !overview;
   const locationCreationMinistries =
     overview?.permissions?.location_creation_ministries || [];
   const canCreateLocations =
@@ -6104,7 +6105,24 @@ export function LocationDetailPage() {
           }}
         />
       </Box>
-      {listedLocations.length === 0 ? (
+      {locationsListFetching ? (
+        <Stack spacing={1.25} sx={{ p: 1.5 }}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Stack
+              key={index}
+              direction="row"
+              spacing={1.5}
+              sx={{ alignItems: "center" }}
+            >
+              <Skeleton variant="circular" width={40} height={40} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Skeleton variant="text" width="72%" />
+                <Skeleton variant="text" width="46%" />
+              </Box>
+            </Stack>
+          ))}
+        </Stack>
+      ) : listedLocations.length === 0 ? (
         <Box sx={{ px: 2.5, py: 3 }}>
           <Typography variant="body2" color="text.secondary">
             No locations to show.

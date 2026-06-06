@@ -12,7 +12,6 @@ import {
   Autocomplete,
   Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,6 +23,7 @@ import {
   MenuItem,
   Paper,
   InputAdornment,
+  Skeleton,
   Stack,
   Tab,
   Tabs,
@@ -42,6 +42,45 @@ import { api, getApiErrorMessage, type Account, type AccountOverview, type Locat
 type HomePageProps = {
   account: Account;
 };
+
+function LocationsListSkeleton() {
+  return (
+    <>
+      <PageHeader title="Home" icon={<HomeIcon />} />
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{
+              alignItems: { xs: "stretch", sm: "center" },
+              justifyContent: "space-between",
+            }}
+          >
+            <Skeleton variant="rounded" height={40} sx={{ width: { xs: "100%", sm: 360 } }} />
+            <Skeleton variant="rounded" height={40} sx={{ width: { xs: "100%", sm: 150 } }} />
+          </Stack>
+          <Skeleton variant="rounded" height={56} />
+        </Stack>
+      </Paper>
+      <Grid container spacing={2.5}>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Grid key={index} size={{ xs: 12, md: 6, lg: 4 }}>
+            <Paper variant="outlined" sx={{ p: 2, height: 220 }}>
+              <Stack spacing={1.5}>
+                <Skeleton variant="circular" width={48} height={48} />
+                <Skeleton variant="text" width="70%" />
+                <Skeleton variant="text" width="45%" />
+                <Skeleton variant="rounded" height={54} />
+                <Skeleton variant="rounded" height={34} />
+              </Stack>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </>
+  );
+}
 
 export function HomePage({ account }: HomePageProps) {
   const [overview, setOverview] = useState<AccountOverview | null>(null);
@@ -195,11 +234,7 @@ export function HomePage({ account }: HomePageProps) {
   }
 
   if (!overview) {
-    return (
-      <Box sx={{ display: "grid", placeItems: "center", minHeight: 360 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <LocationsListSkeleton />;
   }
 
   const locations =
