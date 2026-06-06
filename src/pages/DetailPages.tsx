@@ -207,6 +207,7 @@ const blankActionForm = {
   description: "",
   type: "",
   status: "Active",
+  visibility: "Public",
   user_id: "",
   audience: "Physical",
   role: "",
@@ -1249,7 +1250,7 @@ type ResponsiveGridSize = {
   xl?: number;
 };
 
-function IncrementalGrid<T,>({
+function IncrementalGrid<T>({
   items,
   getKey,
   renderItem,
@@ -1290,7 +1291,11 @@ function LocationTabSkeleton() {
       <Stack spacing={2}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
           <Skeleton variant="rounded" height={40} sx={{ flex: 1 }} />
-          <Skeleton variant="rounded" height={40} sx={{ width: { xs: "100%", sm: 180 } }} />
+          <Skeleton
+            variant="rounded"
+            height={40}
+            sx={{ width: { xs: "100%", sm: 180 } }}
+          />
         </Stack>
         <Grid container spacing={2}>
           {[0, 1, 2, 3, 4, 5].map((item) => (
@@ -2476,7 +2481,9 @@ export function LocationDetailPage() {
       await deleteConfirm.onConfirm();
       setDeleteConfirm(null);
     } catch (requestError) {
-      setDeleteConfirmError(getApiErrorMessage(requestError, "Failed to delete record"));
+      setDeleteConfirmError(
+        getApiErrorMessage(requestError, "Failed to delete record"),
+      );
     } finally {
       setDeleteConfirmSaving(false);
     }
@@ -2664,9 +2671,10 @@ export function LocationDetailPage() {
         ).then(applyResponse(setMfAttendances)),
       );
       jobs.push(
-        safeGet<Schedule[]>(`/schedules?location_id=${requestLocationId}`, []).then(
-          applyResponse(setSchedules),
-        ),
+        safeGet<Schedule[]>(
+          `/schedules?location_id=${requestLocationId}`,
+          [],
+        ).then(applyResponse(setSchedules)),
       );
       jobs.push(
         safeGet<MissionalFamily[]>(
@@ -2691,9 +2699,10 @@ export function LocationDetailPage() {
     }
     if (wants("schedules") || wants("reports")) {
       jobs.push(
-        safeGet<Schedule[]>(`/schedules?location_id=${requestLocationId}`, []).then(
-          applyResponse(setSchedules),
-        ),
+        safeGet<Schedule[]>(
+          `/schedules?location_id=${requestLocationId}`,
+          [],
+        ).then(applyResponse(setSchedules)),
       );
     }
     if (wants("reports") || wants("finances")) {
@@ -2967,7 +2976,9 @@ export function LocationDetailPage() {
     setLocationError("");
     setLocationSuccess("");
     if (account.type !== "Organization" && !locationForm.owner_id) {
-      setLocationError("Select the ministry you are creating this location for.");
+      setLocationError(
+        "Select the ministry you are creating this location for.",
+      );
       return;
     }
     setSavingLocation(true);
@@ -2975,7 +2986,8 @@ export function LocationDetailPage() {
       const response = await api.post<Location>("/locations", {
         ...locationForm,
         author_id: account.id,
-        owner_id: account.type === "Organization" ? account.id : locationForm.owner_id,
+        owner_id:
+          account.type === "Organization" ? account.id : locationForm.owner_id,
       });
       await refreshOverview();
       resetLocationForm();
@@ -3097,7 +3109,9 @@ export function LocationDetailPage() {
       );
       return;
     }
-    const uniqueParticularIds = new Set(items.map((item) => item.particular_id));
+    const uniqueParticularIds = new Set(
+      items.map((item) => item.particular_id),
+    );
     if (uniqueParticularIds.size !== items.length) {
       setRequisitionError(
         "Each requisition item must use a different particular.",
@@ -3273,11 +3287,11 @@ export function LocationDetailPage() {
     setRelatedError("");
     try {
       const memberUpdate = api.patch(`/members/${selectedMemberAction.id}`, {
-          requester_id: account.id,
-          audience: memberEditForm.audience,
-          status: memberEditForm.status,
-          start_date: memberEditForm.start_date || null,
-        });
+        requester_id: account.id,
+        audience: memberEditForm.audience,
+        status: memberEditForm.status,
+        start_date: memberEditForm.start_date || null,
+      });
       const accountUpdate = selectedMemberAction.user_id
         ? api.patch<Account>(`/accounts/${selectedMemberAction.user_id}`, {
             fname: memberEditForm.fname,
@@ -3304,7 +3318,9 @@ export function LocationDetailPage() {
       if (accountResponse?.data) {
         setAccounts((current) =>
           current.map((item) =>
-            idsEqual(item.id, accountResponse.data.id) ? accountResponse.data : item,
+            idsEqual(item.id, accountResponse.data.id)
+              ? accountResponse.data
+              : item,
           ),
         );
       }
@@ -4874,6 +4890,7 @@ export function LocationDetailPage() {
           location_id: location.id,
           title: actionForm.title,
           description: actionForm.description,
+          visibility: actionForm.visibility || "Public",
           startdate: actionForm.startdate || null,
           enddate: actionForm.enddate || null,
           opening_balance:
@@ -5445,7 +5462,11 @@ export function LocationDetailPage() {
     isLocationOwner ||
     locationPastorRoles.includes(activeLocationRole) ||
     hasActiveRole(["Requisitions Approver"]);
-  const canManageLocationResources = isLocationManagerForUi || hasScopedLeadershipRole;
+  const canCreatePrivateCashbooks =
+    locationPastorRoles.includes(activeLocationRole) ||
+    hasActiveRole(locationPastorRoles);
+  const canManageLocationResources =
+    isLocationManagerForUi || hasScopedLeadershipRole;
   const canManageLocationReports = isLocationManagerForUi;
   const isBranchLocation =
     String(location?.type || "").toLowerCase() === "branch";
@@ -5464,16 +5485,18 @@ export function LocationDetailPage() {
         ? [10, 2, 3, 1, 8, 9, 5, ...(subscriptionsEnforced ? [12] : [])]
         : canViewLocationAsViewer
           ? [10, 2, 3, 1, 8, 9]
-        : hasScopedLeadershipRole
-          ? [1, 3, 8]
-          : [
-              ...(canApproveReportsForUi ? [10] : []),
-              ...(canApproveRequisitionsForUi ? [2] : []),
-            ]
+          : hasScopedLeadershipRole
+            ? [1, 3, 8]
+            : [
+                ...(canApproveReportsForUi ? [10] : []),
+                ...(canApproveRequisitionsForUi ? [2] : []),
+              ]
   )
     .filter(
       (tabId) =>
-        isBranchLocation || canViewLocationAsViewer || ![3, 1, 9].includes(tabId),
+        isBranchLocation ||
+        canViewLocationAsViewer ||
+        ![3, 1, 9].includes(tabId),
     )
     .filter((tabId) => !isOfficeLocation || tabId !== 11);
   useEffect(() => {
@@ -5721,92 +5744,98 @@ export function LocationDetailPage() {
             gridSize={{ xs: 12, sm: 6, md: 4 }}
             getKey={(zone) => zone.id}
             renderItem={(zone) => (
-                <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
-                  <Stack spacing={1.5} sx={{ height: "100%" }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="overline" color="text.secondary">
-                          Zone
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
-                          {zone.title || `Zone #${zone.id}`}
-                        </Typography>
-                      </Box>
-                      {canManageLocationResources ? (
-                        <IconButton
-                          aria-label="Zone actions"
-                          size="small"
-                          onClick={(event) => openZoneMenu(event, zone)}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      ) : null}
-                    </Stack>
-                    <List dense disablePadding>
-                      {[
-                        {
-                          label: "Leader",
-                          value: memberName(accounts, zone.leader1_id),
-                          subtitle: memberPhone(accounts, zone.leader1_id),
-                        },
-                        {
-                          label: "Assistant",
-                          value: memberName(accounts, zone.leader2_id),
-                          subtitle: memberPhone(accounts, zone.leader2_id),
-                        },
-                        {
-                          label: "Missional Families",
-                          value: String(
-                            missionalFamilies.filter(
-                              (family) => family.zone_id === zone.id,
-                            ).length,
-                          ),
-                        },
-                      ].map((item) => (
-                        <ListItem
-                          key={item.label}
-                          disableGutters
-                          divider
-                          sx={{ py: 0.75, gap: 1 }}
-                        >
-                          <ListItemText
-                            primary={item.label}
-                            slotProps={{
-                              primary: {
-                                variant: "body2",
-                                color: "text.secondary",
-                              },
-                            }}
-                          />
-                          <Box sx={{ minWidth: 0, textAlign: "right" }}>
-                            <Typography variant="body2" color="text.secondary">
-                              {item.value}
-                            </Typography>
-                            {item.subtitle ? (
-                              <Typography variant="caption" color="text.secondary">
-                                {item.subtitle}
-                              </Typography>
-                            ) : null}
-                          </Box>
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mt: "auto" }}
-                    >
-                      {zone.description || "No description has been added yet."}
-                    </Typography>
+              <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
+                <Stack spacing={1.5} sx={{ height: "100%" }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="overline" color="text.secondary">
+                        Zone
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 800, mt: 0.25 }}
+                      >
+                        {zone.title || `Zone #${zone.id}`}
+                      </Typography>
+                    </Box>
+                    {canManageLocationResources ? (
+                      <IconButton
+                        aria-label="Zone actions"
+                        size="small"
+                        onClick={(event) => openZoneMenu(event, zone)}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    ) : null}
                   </Stack>
-                </Paper>
+                  <List dense disablePadding>
+                    {[
+                      {
+                        label: "Leader",
+                        value: memberName(accounts, zone.leader1_id),
+                        subtitle: memberPhone(accounts, zone.leader1_id),
+                      },
+                      {
+                        label: "Assistant",
+                        value: memberName(accounts, zone.leader2_id),
+                        subtitle: memberPhone(accounts, zone.leader2_id),
+                      },
+                      {
+                        label: "Missional Families",
+                        value: String(
+                          missionalFamilies.filter(
+                            (family) => family.zone_id === zone.id,
+                          ).length,
+                        ),
+                      },
+                    ].map((item) => (
+                      <ListItem
+                        key={item.label}
+                        disableGutters
+                        divider
+                        sx={{ py: 0.75, gap: 1 }}
+                      >
+                        <ListItemText
+                          primary={item.label}
+                          slotProps={{
+                            primary: {
+                              variant: "body2",
+                              color: "text.secondary",
+                            },
+                          }}
+                        />
+                        <Box sx={{ minWidth: 0, textAlign: "right" }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.value}
+                          </Typography>
+                          {item.subtitle ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {item.subtitle}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: "auto" }}
+                  >
+                    {zone.description || "No description has been added yet."}
+                  </Typography>
+                </Stack>
+              </Paper>
             )}
           />
         ) : (
@@ -5848,109 +5877,116 @@ export function LocationDetailPage() {
             gridSize={{ xs: 12, sm: 6, md: 4 }}
             getKey={(family) => family.id}
             renderItem={(family) => (
-                <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
-                  <Stack spacing={1.5} sx={{ height: "100%" }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="overline" color="text.secondary">
-                          Missional Family
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.25 }}>
-                          {family.title || `Missional Family #${family.id}`}
-                        </Typography>
-                      </Box>
-                      {canManageLocationResources ? (
-                        <IconButton
-                          aria-label="Missional family actions"
-                          size="small"
-                          onClick={(event) => openFamilyMenu(event, family)}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      ) : null}
-                    </Stack>
-                    <List dense disablePadding>
-                      {[
-                        {
-                          label: "Zone",
-                          value:
-                            zones.find((zone) => idsEqual(zone.id, family.zone_id))
-                              ?.title || "Not set",
-                        },
-                        {
-                          label: "Leader",
-                          value: memberName(accounts, family.leader1_id),
-                          subtitle: memberPhone(accounts, family.leader1_id),
-                        },
-                        {
-                          label: "Assistant",
-                          value: memberName(accounts, family.leader2_id),
-                          subtitle: memberPhone(accounts, family.leader2_id),
-                        },
-                        {
-                          label: "Members",
-                          value: String(
-                            missionalFamilyMembers.filter(
-                              (member) =>
-                                idsEqual(member.mf_id, family.id) &&
-                                member.status !== "Inactive",
-                            ).length,
-                          ),
-                        },
-                      ].map((item) => (
-                        <ListItem
-                          key={item.label}
-                          disableGutters
-                          divider
-                          sx={{ py: 0.75, gap: 1 }}
-                        >
-                          <ListItemIcon sx={{ minWidth: 30 }}>
-                            <CheckCircleIcon color="secondary" fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={item.label}
-                            slotProps={{
-                              primary: {
-                                variant: "body2",
-                                color: "text.secondary",
-                              },
-                            }}
-                          />
-                          <Box sx={{ minWidth: 0, textAlign: "right" }}>
-                            <Typography variant="body2" color="text.secondary">
-                              {item.value}
-                            </Typography>
-                            {item.subtitle ? (
-                              <Typography variant="caption" color="text.secondary">
-                                {item.subtitle}
-                              </Typography>
-                            ) : null}
-                          </Box>
-                        </ListItem>
-                      ))}
-                    </List>
-                    <Typography variant="body2" color="text.secondary">
-                      {family.description || "No description has been added yet."}
-                    </Typography>
-                    <Box sx={{ mt: "auto" }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<GroupsIcon />}
-                        onClick={() => openFamilyMembers(family)}
+              <Paper variant="outlined" sx={{ height: "100%", p: 2.25 }}>
+                <Stack spacing={1.5} sx={{ height: "100%" }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="overline" color="text.secondary">
+                        Missional Family
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 800, mt: 0.25 }}
                       >
-                        View Members
-                      </Button>
+                        {family.title || `Missional Family #${family.id}`}
+                      </Typography>
                     </Box>
+                    {canManageLocationResources ? (
+                      <IconButton
+                        aria-label="Missional family actions"
+                        size="small"
+                        onClick={(event) => openFamilyMenu(event, family)}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    ) : null}
                   </Stack>
-                </Paper>
+                  <List dense disablePadding>
+                    {[
+                      {
+                        label: "Zone",
+                        value:
+                          zones.find((zone) =>
+                            idsEqual(zone.id, family.zone_id),
+                          )?.title || "Not set",
+                      },
+                      {
+                        label: "Leader",
+                        value: memberName(accounts, family.leader1_id),
+                        subtitle: memberPhone(accounts, family.leader1_id),
+                      },
+                      {
+                        label: "Assistant",
+                        value: memberName(accounts, family.leader2_id),
+                        subtitle: memberPhone(accounts, family.leader2_id),
+                      },
+                      {
+                        label: "Members",
+                        value: String(
+                          missionalFamilyMembers.filter(
+                            (member) =>
+                              idsEqual(member.mf_id, family.id) &&
+                              member.status !== "Inactive",
+                          ).length,
+                        ),
+                      },
+                    ].map((item) => (
+                      <ListItem
+                        key={item.label}
+                        disableGutters
+                        divider
+                        sx={{ py: 0.75, gap: 1 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 30 }}>
+                          <CheckCircleIcon color="secondary" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={item.label}
+                          slotProps={{
+                            primary: {
+                              variant: "body2",
+                              color: "text.secondary",
+                            },
+                          }}
+                        />
+                        <Box sx={{ minWidth: 0, textAlign: "right" }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {item.value}
+                          </Typography>
+                          {item.subtitle ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {item.subtitle}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="body2" color="text.secondary">
+                    {family.description || "No description has been added yet."}
+                  </Typography>
+                  <Box sx={{ mt: "auto" }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<GroupsIcon />}
+                      onClick={() => openFamilyMembers(family)}
+                    >
+                      View Members
+                    </Button>
+                  </Box>
+                </Stack>
+              </Paper>
             )}
           />
         ) : (
@@ -6001,9 +6037,23 @@ export function LocationDetailPage() {
     overview?.permissions?.can_create_locations === true &&
     (account?.type === "Organization" || locationCreationMinistries.length > 0);
   const selectedCreationMinistry =
-    locationCreationMinistries.find((item) => item.owner_id === locationForm.owner_id) ||
-    null;
-  const locationsCard = (
+    locationCreationMinistries.find(
+      (item) => item.owner_id === locationForm.owner_id,
+    ) || null;
+  const openCreateLocationDrawer = () => {
+    setLocationError("");
+    resetLocationForm();
+    if (
+      account?.type !== "Organization" &&
+      locationCreationMinistries.length === 1
+    ) {
+      updateLocationForm({
+        owner_id: locationCreationMinistries[0].owner_id,
+      });
+    }
+    setLocationDrawerOpen(true);
+  };
+  const renderLocationsCard = (showCreateAction = true) => (
     <Paper variant="outlined" sx={{ overflow: "hidden" }}>
       <Box
         sx={{
@@ -6018,24 +6068,12 @@ export function LocationDetailPage() {
         <Typography variant="h6" sx={{ fontWeight: 900 }}>
           Locations
         </Typography>
-        {canCreateLocations ? (
+        {canCreateLocations && showCreateAction ? (
           <IconButton
             color="primary"
             size="small"
             aria-label="Create New Location"
-            onClick={() => {
-              setLocationError("");
-              resetLocationForm();
-              if (
-                account?.type !== "Organization" &&
-                locationCreationMinistries.length === 1
-              ) {
-                updateLocationForm({
-                  owner_id: locationCreationMinistries[0].owner_id,
-                });
-              }
-              setLocationDrawerOpen(true);
-            }}
+            onClick={openCreateLocationDrawer}
             sx={{
               bgcolor: "primary.main",
               color: "primary.contrastText",
@@ -6104,6 +6142,7 @@ export function LocationDetailPage() {
       )}
     </Paper>
   );
+  const locationsCard = renderLocationsCard();
   const createLocationDrawer = (
     <Drawer
       anchor="right"
@@ -7103,11 +7142,7 @@ export function LocationDetailPage() {
 
     const pendingDates = new Set<string>();
     senderSchedules.forEach((schedule) => {
-      occurrenceDates(
-        schedule,
-        reportWindowEnd,
-        effectiveStartDate,
-      )
+      occurrenceDates(schedule, reportWindowEnd, effectiveStartDate)
         .map((occurrence) => occurrence.format("YYYY-MM-DD"))
         .filter(
           (scheduleDate) =>
@@ -7991,6 +8026,22 @@ export function LocationDetailPage() {
             <SwapHorizIcon />
           </IconButton>
         </Tooltip>
+        {canCreateLocations ? (
+          <Tooltip title="Add Location">
+            <IconButton
+              color="primary"
+              aria-label="Add Location"
+              onClick={openCreateLocationDrawer}
+              sx={{
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+                "&:hover": { bgcolor: "primary.dark" },
+              }}
+            >
+              <AddIcon />
+            </IconButton>
+          </Tooltip>
+        ) : null}
       </Stack>
       <Grid container spacing={2.5} sx={{ alignItems: "stretch" }}>
         <Grid
@@ -8593,6 +8644,9 @@ export function LocationDetailPage() {
                                     cashbook={cashbook}
                                     requesterId={account?.id}
                                     accounts={accounts}
+                                    canManagePrivateVisibility={
+                                      canCreatePrivateCashbooks
+                                    }
                                     returnTo={`${routerLocation.pathname}${routerLocation.search}`}
                                     onRefresh={loadRelatedRecords}
                                   />
@@ -8676,6 +8730,11 @@ export function LocationDetailPage() {
                                         : "secondary"
                                     }
                                     label={cashbook.status || "Active"}
+                                  />
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={cashbook.visibility || "Public"}
                                   />
                                   <Button
                                     size="small"
@@ -9599,7 +9658,8 @@ export function LocationDetailPage() {
                                   requestDeleteConfirmation(
                                     "Delete Remission?",
                                     `This will permanently delete ${remission.title || "this remission"}.`,
-                                    () => handleDeleteLocationRemission(remission),
+                                    () =>
+                                      handleDeleteLocationRemission(remission),
                                   )
                                 }
                                 disabled={remissionSaving}
@@ -11367,71 +11427,73 @@ export function LocationDetailPage() {
       >
         <DialogTitle>Report Settings</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {reportSettingsError ? (
-              <Alert severity="error">{reportSettingsError}</Alert>
-            ) : null}
-            {location.is_hq ? (
-              <Autocomplete
-                options={reportReceiverOptions}
-                value={
-                  reportReceiverOptions.find((item) =>
-                    idsEqual(
-                      item.id,
-                      reportSettingsForm.report_receiver_location_id,
-                    ),
-                  ) || null
-                }
-                onChange={(_, option) =>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {reportSettingsError ? (
+                <Alert severity="error">{reportSettingsError}</Alert>
+              ) : null}
+              {location.is_hq ? (
+                <Autocomplete
+                  options={reportReceiverOptions}
+                  value={
+                    reportReceiverOptions.find((item) =>
+                      idsEqual(
+                        item.id,
+                        reportSettingsForm.report_receiver_location_id,
+                      ),
+                    ) || null
+                  }
+                  onChange={(_, option) =>
+                    setReportSettingsForm((current) => ({
+                      ...current,
+                      report_receiver_location_id: option?.id || "",
+                    }))
+                  }
+                  getOptionLabel={(option) =>
+                    option.title || `Location #${option.id}`
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Forward HQ reports to"
+                      helperText="Leave blank when the HQ should keep reports locally."
+                      fullWidth
+                    />
+                  )}
+                  fullWidth
+                />
+              ) : null}
+              <DatePicker
+                label="Reporting Start Date"
+                value={toPickerValue(reportSettingsForm.reporting_start_date)}
+                onChange={(value) =>
                   setReportSettingsForm((current) => ({
                     ...current,
-                    report_receiver_location_id: option?.id || "",
+                    reporting_start_date: fromPickerValue(value),
                   }))
                 }
-                getOptionLabel={(option) =>
-                  option.title || `Location #${option.id}`
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+              <Autocomplete
+                multiple
+                options={dynamicScheduleTypeOptions}
+                value={reportSettingsForm.mandatory_report_schedule_types}
+                onChange={(_, value) =>
+                  setReportSettingsForm((current) => ({
+                    ...current,
+                    mandatory_report_schedule_types: value,
+                  }))
                 }
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Forward HQ reports to"
-                    helperText="Leave blank when the HQ should keep reports locally."
+                    label="Mandatory schedule types from branches"
                     fullWidth
                   />
                 )}
-                fullWidth
               />
-            ) : null}
-            <DatePicker
-              label="Reporting Start Date"
-              value={toPickerValue(reportSettingsForm.reporting_start_date)}
-              onChange={(value) =>
-                setReportSettingsForm((current) => ({
-                  ...current,
-                  reporting_start_date: fromPickerValue(value),
-                }))
-              }
-              slotProps={{ textField: { fullWidth: true } }}
-            />
-            <Autocomplete
-              multiple
-              options={dynamicScheduleTypeOptions}
-              value={reportSettingsForm.mandatory_report_schedule_types}
-              onChange={(_, value) =>
-                setReportSettingsForm((current) => ({
-                  ...current,
-                  mandatory_report_schedule_types: value,
-                }))
-              }
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Mandatory schedule types from branches"
-                  fullWidth
-                />
-              )}
-            />
-          </Stack>
+            </Stack>
+          </LocalizationProvider>
         </DialogContent>
         <DialogActions>
           <Button
@@ -12109,7 +12171,9 @@ export function LocationDetailPage() {
               }}
             >
               <Avatar
-                src={memberEditForm.profile_picture || defaultProfilePictureAsset}
+                src={
+                  memberEditForm.profile_picture || defaultProfilePictureAsset
+                }
                 variant="rounded"
                 sx={{
                   width: 92,
@@ -12250,19 +12314,6 @@ export function LocationDetailPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Start Date"
-              type="date"
-              value={memberEditForm.start_date}
-              onChange={(event) =>
-                setMemberEditForm((current) => ({
-                  ...current,
-                  start_date: event.target.value,
-                }))
-              }
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
-            />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="Gender"
@@ -12296,7 +12347,7 @@ export function LocationDetailPage() {
                 <MenuItem value="Single">Single</MenuItem>
                 <MenuItem value="Married">Married</MenuItem>
                 <MenuItem value="Widow">Widow</MenuItem>
-                <MenuItem value="Widwowar">Widwowar</MenuItem>
+                <MenuItem value="Widowar">Widowar</MenuItem>
               </TextField>
             </Stack>
             <TextField
@@ -12909,7 +12960,11 @@ export function LocationDetailPage() {
               >
                 {requisitionSaving ? (
                   <>
-                    <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                    <CircularProgress
+                      size={18}
+                      color="inherit"
+                      sx={{ mr: 1 }}
+                    />
                     Saving...
                   </>
                 ) : editingRequisition ? (
@@ -12939,6 +12994,7 @@ export function LocationDetailPage() {
         attendances={attendances}
         mfAttendances={mfAttendances}
         attendanceCreateScope={attendanceCreateScope}
+        canCreatePrivateCashbooks={canCreatePrivateCashbooks}
         error={actionError}
         saving={actionSaving}
         onChange={updateActionForm}
@@ -13175,317 +13231,338 @@ export function LocationDetailPage() {
             {reportEditOpen ? "Modify General Report" : "Create General Report"}
           </DialogTitle>
           <DialogContent sx={{ flex: 1 }}>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              {reportError ? (
-                <Alert severity="error">{reportError}</Alert>
-              ) : null}
-              {reportSuccess ? (
-                <Alert severity="success">{reportSuccess}</Alert>
-              ) : null}
-              <Tabs
-                value={reportForm.type}
-                onChange={(_, value: string) => handleReportTypeChange(value)}
-                sx={{ borderBottom: 1, borderColor: "divider" }}
-              >
-                <Tab value="Attendance" label="Attendance" />
-                <Tab value="Financial" label="Collections" />
-              </Tabs>
-              {reportForm.type === "Attendance" ? (
-                <>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                    <DatePicker
-                      label="Schedule Date"
-                      value={toPickerValue(reportForm.schedule_date)}
-                      onChange={handleReportDateChange}
-                      disableFuture
-                      shouldDisableDate={(day) =>
-                        disableFutureSchedulePickerDay(day, schedules) ||
-                        isAttendanceScheduleDateReported(
-                          day.format("YYYY-MM-DD"),
-                        )
-                      }
-                      slots={{ day: renderReportScheduleAwareDay }}
-                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
-                    />
-                    <TextField
-                      label="Report Title"
-                      value={reportForm.title}
-                      slotProps={{ input: { readOnly: true } }}
-                      fullWidth
-                      required
-                    />
-                  </Stack>
-                  <TextField
-                    select
-                    label="Schedule Type"
-                    value={reportForm.schedule_type}
-                    onChange={(event) =>
-                      handleReportScheduleTypeChange(event.target.value)
-                    }
-                    fullWidth
-                    required
-                  >
-                    {reportScheduleTypeOptions.length === 0 ? (
-                      <MenuItem value="">No schedule types</MenuItem>
-                    ) : (
-                      reportScheduleTypeOptions.map((scheduleType) => (
-                        <MenuItem key={scheduleType} value={scheduleType}>
-                          {scheduleType}
-                        </MenuItem>
-                      ))
-                    )}
-                  </TextField>
-                  <Autocomplete
-                    multiple
-                    disableCloseOnSelect
-                    options={[
-                      {
-                        id: "__all_schedules__",
-                        title: "All schedules",
-                      } as Schedule,
-                      ...typedSchedulesForReportDate,
-                    ]}
-                    value={selectedReportSchedules}
-                    onChange={(_, value) => handleReportSchedulesChange(value)}
-                    getOptionLabel={scheduleOptionLabel}
-                    isOptionEqualToValue={(option, value) =>
-                      option.id === value.id
-                    }
-                    renderOption={(props, option, { selected }) => {
-                      const isAllOption = option.id === "__all_schedules__";
-                      const allSelected =
-                        typedSchedulesForReportDate.length > 0 &&
-                        reportForm.schedule_ids.length ===
-                          typedSchedulesForReportDate.length;
-                      return (
-                        <li {...props}>
-                          <Checkbox
-                            checked={isAllOption ? allSelected : selected}
-                            sx={{ mr: 1 }}
-                          />
-                          {scheduleOptionLabel(option)}
-                        </li>
-                      );
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Schedules"
-                        required
-                        fullWidth
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                {reportError ? (
+                  <Alert severity="error">{reportError}</Alert>
+                ) : null}
+                {reportSuccess ? (
+                  <Alert severity="success">{reportSuccess}</Alert>
+                ) : null}
+                <Tabs
+                  value={reportForm.type}
+                  onChange={(_, value: string) => handleReportTypeChange(value)}
+                  sx={{ borderBottom: 1, borderColor: "divider" }}
+                >
+                  <Tab value="Attendance" label="Attendance" />
+                  <Tab value="Financial" label="Collections" />
+                </Tabs>
+                {reportForm.type === "Attendance" ? (
+                  <>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <DatePicker
+                        label="Schedule Date"
+                        value={toPickerValue(reportForm.schedule_date)}
+                        onChange={handleReportDateChange}
+                        disableFuture
+                        shouldDisableDate={(day) =>
+                          disableFutureSchedulePickerDay(day, schedules) ||
+                          isAttendanceScheduleDateReported(
+                            day.format("YYYY-MM-DD"),
+                          )
+                        }
+                        slots={{ day: renderReportScheduleAwareDay }}
+                        slotProps={{
+                          textField: { fullWidth: true, size: "small" },
+                        }}
                       />
-                    )}
-                    slotProps={{ chip: { color: "secondary", size: "small" } }}
-                    fullWidth
-                  />
-                </>
-              ) : (
-                <>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                    <DatePicker
-                      label="Schedule Date"
-                      value={toPickerValue(reportForm.schedule_date)}
-                      onChange={handleReportDateChange}
-                      disableFuture
-                      shouldDisableDate={disableFinanceSchedulePickerDay}
-                      slots={{ day: renderFinanceScheduleDateDay }}
-                      slotProps={{
-                        textField: { fullWidth: true, required: true, size: "small" },
-                      }}
-                    />
+                      <TextField
+                        label="Report Title"
+                        value={reportForm.title}
+                        slotProps={{ input: { readOnly: true } }}
+                        fullWidth
+                        required
+                      />
+                    </Stack>
                     <TextField
-                      label="Report Title"
-                      value={reportForm.title}
+                      select
+                      label="Schedule Type"
+                      value={reportForm.schedule_type}
+                      onChange={(event) =>
+                        handleReportScheduleTypeChange(event.target.value)
+                      }
+                      fullWidth
+                      required
+                    >
+                      {reportScheduleTypeOptions.length === 0 ? (
+                        <MenuItem value="">No schedule types</MenuItem>
+                      ) : (
+                        reportScheduleTypeOptions.map((scheduleType) => (
+                          <MenuItem key={scheduleType} value={scheduleType}>
+                            {scheduleType}
+                          </MenuItem>
+                        ))
+                      )}
+                    </TextField>
+                    <Autocomplete
+                      multiple
+                      disableCloseOnSelect
+                      options={[
+                        {
+                          id: "__all_schedules__",
+                          title: "All schedules",
+                        } as Schedule,
+                        ...typedSchedulesForReportDate,
+                      ]}
+                      value={selectedReportSchedules}
+                      onChange={(_, value) =>
+                        handleReportSchedulesChange(value)
+                      }
+                      getOptionLabel={scheduleOptionLabel}
+                      isOptionEqualToValue={(option, value) =>
+                        option.id === value.id
+                      }
+                      renderOption={(props, option, { selected }) => {
+                        const isAllOption = option.id === "__all_schedules__";
+                        const allSelected =
+                          typedSchedulesForReportDate.length > 0 &&
+                          reportForm.schedule_ids.length ===
+                            typedSchedulesForReportDate.length;
+                        return (
+                          <li {...props}>
+                            <Checkbox
+                              checked={isAllOption ? allSelected : selected}
+                              sx={{ mr: 1 }}
+                            />
+                            {scheduleOptionLabel(option)}
+                          </li>
+                        );
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Schedules"
+                          required
+                          fullWidth
+                        />
+                      )}
+                      slotProps={{
+                        chip: { color: "secondary", size: "small" },
+                      }}
+                      fullWidth
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <DatePicker
+                        label="Schedule Date"
+                        value={toPickerValue(reportForm.schedule_date)}
+                        onChange={handleReportDateChange}
+                        disableFuture
+                        shouldDisableDate={disableFinanceSchedulePickerDay}
+                        slots={{ day: renderFinanceScheduleDateDay }}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            required: true,
+                            size: "small",
+                          },
+                        }}
+                      />
+                      <TextField
+                        label="Report Title"
+                        value={reportForm.title}
+                        slotProps={{ input: { readOnly: true } }}
+                        fullWidth
+                        required
+                      />
+                    </Stack>
+                    <TextField
+                      select
+                      label="Schedule Type"
+                      value={reportForm.schedule_type}
+                      onChange={(event) =>
+                        handleReportScheduleTypeChange(event.target.value)
+                      }
+                      fullWidth
+                      required
+                    >
+                      {financeScheduleTypeOptions.length === 0 ? (
+                        <MenuItem value="">No schedule types</MenuItem>
+                      ) : (
+                        financeScheduleTypeOptions.map((scheduleType) => (
+                          <MenuItem key={scheduleType} value={scheduleType}>
+                            {scheduleType}
+                          </MenuItem>
+                        ))
+                      )}
+                    </TextField>
+                    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                      <Grid
+                        container
+                        spacing={0}
+                        sx={{ bgcolor: "action.hover", px: 1.5, py: 1 }}
+                      >
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 800 }}
+                          >
+                            Collections
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 800 }}
+                          >
+                            Remissions
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 800 }}
+                          >
+                            Remission Value
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                      <Stack divider={<Divider />}>
+                        {collectionReportRows.length ? (
+                          collectionReportRows.map((row) => (
+                            <Grid
+                              key={row.key}
+                              container
+                              spacing={1.5}
+                              sx={{ px: 1.5, py: 1.25, alignItems: "center" }}
+                            >
+                              <Grid size={{ xs: 12, sm: 4 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontWeight: 700 }}
+                                >
+                                  {row.particularTitle}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {row.scheduleIds.length} schedule
+                                  {row.scheduleIds.length === 1
+                                    ? ""
+                                    : "s"} ·{" "}
+                                  {row.collectionValue.toLocaleString()}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, sm: 4 }}>
+                                <Typography variant="body2">
+                                  {row.remissionTitle}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {row.remissionPercentage}%
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, sm: 4 }}>
+                                <TextField
+                                  value={row.remissionValue}
+                                  size="small"
+                                  slotProps={{ input: { readOnly: true } }}
+                                  fullWidth
+                                />
+                              </Grid>
+                            </Grid>
+                          ))
+                        ) : (
+                          <Box sx={{ px: 1.5, py: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              No income collections are recorded for this
+                              schedule date and type.
+                            </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+                    </Paper>
+                  </>
+                )}
+                {reportForm.type === "Attendance" ? (
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <TextField
+                      label="Total Attendance"
+                      type="number"
+                      value={reportForm.value}
                       slotProps={{ input: { readOnly: true } }}
                       fullWidth
                       required
                     />
                   </Stack>
-                  <TextField
-                    select
-                    label="Schedule Type"
-                    value={reportForm.schedule_type}
-                    onChange={(event) =>
-                      handleReportScheduleTypeChange(event.target.value)
-                    }
-                    fullWidth
-                    required
+                ) : (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr) 48px",
+                      gap: 1,
+                      alignItems: "start",
+                    }}
                   >
-                    {financeScheduleTypeOptions.length === 0 ? (
-                      <MenuItem value="">No schedule types</MenuItem>
-                    ) : (
-                      financeScheduleTypeOptions.map((scheduleType) => (
-                        <MenuItem key={scheduleType} value={scheduleType}>
-                          {scheduleType}
-                        </MenuItem>
-                      ))
-                    )}
-                  </TextField>
-                  <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                    <Grid
-                      container
-                      spacing={0}
-                      sx={{ bgcolor: "action.hover", px: 1.5, py: 1 }}
-                    >
-                      <Grid size={{ xs: 12, sm: 4 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800 }}>
-                          Collections
-                        </Typography>
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 4 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800 }}>
-                          Remissions
-                        </Typography>
-                      </Grid>
-                      <Grid size={{ xs: 12, sm: 4 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 800 }}>
-                          Remission Value
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                    <Stack divider={<Divider />}>
-                      {collectionReportRows.length ? (
-                        collectionReportRows.map((row) => (
-                          <Grid
-                            key={row.key}
-                            container
-                            spacing={1.5}
-                            sx={{ px: 1.5, py: 1.25, alignItems: "center" }}
-                          >
-                            <Grid size={{ xs: 12, sm: 4 }}>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: 700 }}
-                              >
-                                {row.particularTitle}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {row.scheduleIds.length} schedule
-                                {row.scheduleIds.length === 1 ? "" : "s"} ·{" "}
-                                {row.collectionValue.toLocaleString()}
-                              </Typography>
-                            </Grid>
-                            <Grid size={{ xs: 12, sm: 4 }}>
-                              <Typography variant="body2">
-                                {row.remissionTitle}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {row.remissionPercentage}%
-                              </Typography>
-                            </Grid>
-                            <Grid size={{ xs: 12, sm: 4 }}>
-                              <TextField
-                                value={row.remissionValue}
-                                size="small"
-                                slotProps={{ input: { readOnly: true } }}
-                                fullWidth
-                              />
-                            </Grid>
-                          </Grid>
-                        ))
-                      ) : (
-                        <Box sx={{ px: 1.5, py: 2 }}>
-                          <Typography variant="body2" color="text.secondary">
-                            No income collections are recorded for this schedule
-                            date and type.
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
-                  </Paper>
-                </>
-              )}
-              {reportForm.type === "Attendance" ? (
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <TextField
-                    label="Total Attendance"
-                    type="number"
-                    value={reportForm.value}
-                    slotProps={{ input: { readOnly: true } }}
-                    fullWidth
-                    required
-                  />
-                </Stack>
-              ) : (
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) 48px",
-                    gap: 1,
-                    alignItems: "start",
-                  }}
-                >
-                  <TextField
-                    label="Remission Value"
-                    type="number"
-                    value={collectionRemissionTotal.toFixed(2)}
-                    slotProps={{ input: { readOnly: true } }}
-                    fullWidth
-                    required
-                  />
-                  <Tooltip title="Manage remissions">
-                    <IconButton
-                      aria-label="Manage remissions"
-                      color="secondary"
-                      onClick={openLocationRemissionDrawer}
-                      sx={{
-                        border: 1,
-                        borderColor: "divider",
-                        height: 40,
-                        width: 40,
-                      }}
-                    >
-                      <SettingsIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              )}
-              <TextField
-                label="Description"
-                value={reportForm.description}
-                onChange={(event) =>
-                  updateReportForm({ description: event.target.value })
-                }
-                multiline
-                minRows={3}
-                fullWidth
-              />
-              <Stack direction="row" spacing={1.5}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => {
-                    setReportCreateOpen(false);
-                    setReportEditOpen(false);
-                    setReportEditCard(null);
-                  }}
-                  disabled={reportSaving}
-                  fullWidth
-                >
-                  Close
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() =>
-                    void (reportEditOpen
-                      ? saveLocationReportDraft(reportEditCard)
-                      : handleCreateLocationReport())
+                    <TextField
+                      label="Remission Value"
+                      type="number"
+                      value={collectionRemissionTotal.toFixed(2)}
+                      slotProps={{ input: { readOnly: true } }}
+                      fullWidth
+                      required
+                    />
+                    <Tooltip title="Manage remissions">
+                      <IconButton
+                        aria-label="Manage remissions"
+                        color="secondary"
+                        onClick={openLocationRemissionDrawer}
+                        sx={{
+                          border: 1,
+                          borderColor: "divider",
+                          height: 40,
+                          width: 40,
+                        }}
+                      >
+                        <SettingsIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
+                <TextField
+                  label="Description"
+                  value={reportForm.description}
+                  onChange={(event) =>
+                    updateReportForm({ description: event.target.value })
                   }
-                  disabled={reportCreateDisabled}
+                  multiline
+                  minRows={3}
                   fullWidth
-                >
-                  {reportSaving ? "Saving..." : "Save"}
-                </Button>
+                />
+                <Stack direction="row" spacing={1.5}>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => {
+                      setReportCreateOpen(false);
+                      setReportEditOpen(false);
+                      setReportEditCard(null);
+                    }}
+                    disabled={reportSaving}
+                    fullWidth
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() =>
+                      void (reportEditOpen
+                        ? saveLocationReportDraft(reportEditCard)
+                        : handleCreateLocationReport())
+                    }
+                    disabled={reportCreateDisabled}
+                    fullWidth
+                  >
+                    {reportSaving ? "Saving..." : "Save"}
+                  </Button>
+                </Stack>
               </Stack>
-            </Stack>
-          </LocalizationProvider>
+            </LocalizationProvider>
           </DialogContent>
         </Box>
       </Drawer>
@@ -13504,147 +13581,149 @@ export function LocationDetailPage() {
           <Typography variant="h5" sx={{ fontWeight: 900, mb: 3 }}>
             Edit Location
           </Typography>
-          <Stack spacing={2}>
-            {locationEditError ? (
-              <Alert severity="error">{locationEditError}</Alert>
-            ) : null}
-            <TextField
-              label="Location Name"
-              value={locationEditForm.title}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              label="Type"
-              value={locationEditForm.type}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  type: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              label="Description"
-              value={locationEditForm.description}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-              multiline
-              minRows={3}
-              fullWidth
-            />
-            <TextField
-              label="Email"
-              value={locationEditForm.email}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  email: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              label="Phone Number"
-              value={locationEditForm.phone_number}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  phone_number: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <Stack spacing={2}>
+              {locationEditError ? (
+                <Alert severity="error">{locationEditError}</Alert>
+              ) : null}
               <TextField
-                label="Country"
-                value={locationEditForm.country}
+                label="Location Name"
+                value={locationEditForm.title}
                 onChange={(event) =>
                   setLocationEditForm((current) => ({
                     ...current,
-                    country: event.target.value,
+                    title: event.target.value,
                   }))
                 }
                 fullWidth
               />
               <TextField
-                label="Region"
-                value={locationEditForm.district}
+                label="Type"
+                value={locationEditForm.type}
                 onChange={(event) =>
                   setLocationEditForm((current) => ({
                     ...current,
-                    district: event.target.value,
+                    type: event.target.value,
                   }))
                 }
                 fullWidth
               />
-            </Stack>
-            <TextField
-              label="City"
-              value={locationEditForm.city}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  city: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              label="Address"
-              value={locationEditForm.address}
-              onChange={(event) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  address: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <DatePicker
-              label="Reporting Start Date"
-              value={toPickerValue(locationEditForm.reporting_start_date)}
-              onChange={(value) =>
-                setLocationEditForm((current) => ({
-                  ...current,
-                  reporting_start_date: fromPickerValue(value),
-                }))
-              }
-              slotProps={{ textField: { fullWidth: true } }}
-            />
-            <Stack direction="row" spacing={1.5}>
-              <Button
-                variant="contained"
-                onClick={saveLocationEdit}
-                disabled={locationEditSaving}
-                startIcon={
-                  locationEditSaving ? (
-                    <CircularProgress color="inherit" size={16} />
-                  ) : null
+              <TextField
+                label="Description"
+                value={locationEditForm.description}
+                onChange={(event) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
                 }
-              >
-                {locationEditSaving ? "Saving..." : "Save"}
-              </Button>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => setLocationEditOpen(false)}
-                disabled={locationEditSaving}
-              >
-                Close
-              </Button>
+                multiline
+                minRows={3}
+                fullWidth
+              />
+              <TextField
+                label="Email"
+                value={locationEditForm.email}
+                onChange={(event) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                label="Phone Number"
+                value={locationEditForm.phone_number}
+                onChange={(event) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    phone_number: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <TextField
+                  label="Country"
+                  value={locationEditForm.country}
+                  onChange={(event) =>
+                    setLocationEditForm((current) => ({
+                      ...current,
+                      country: event.target.value,
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  label="Region"
+                  value={locationEditForm.district}
+                  onChange={(event) =>
+                    setLocationEditForm((current) => ({
+                      ...current,
+                      district: event.target.value,
+                    }))
+                  }
+                  fullWidth
+                />
+              </Stack>
+              <TextField
+                label="City"
+                value={locationEditForm.city}
+                onChange={(event) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    city: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                label="Address"
+                value={locationEditForm.address}
+                onChange={(event) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    address: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <DatePicker
+                label="Reporting Start Date"
+                value={toPickerValue(locationEditForm.reporting_start_date)}
+                onChange={(value) =>
+                  setLocationEditForm((current) => ({
+                    ...current,
+                    reporting_start_date: fromPickerValue(value),
+                  }))
+                }
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+              <Stack direction="row" spacing={1.5}>
+                <Button
+                  variant="contained"
+                  onClick={saveLocationEdit}
+                  disabled={locationEditSaving}
+                  startIcon={
+                    locationEditSaving ? (
+                      <CircularProgress color="inherit" size={16} />
+                    ) : null
+                  }
+                >
+                  {locationEditSaving ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={() => setLocationEditOpen(false)}
+                  disabled={locationEditSaving}
+                >
+                  Close
+                </Button>
+              </Stack>
             </Stack>
-          </Stack>
+          </LocalizationProvider>
         </Box>
       </Drawer>
       <Dialog
@@ -13661,7 +13740,8 @@ export function LocationDetailPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="warning">
-              This will permanently delete this location and its related records.
+              This will permanently delete this location and its related
+              records.
             </Alert>
             {locationDeleteError ? (
               <Alert severity="error">{locationDeleteError}</Alert>
@@ -13697,7 +13777,9 @@ export function LocationDetailPage() {
       <ConfirmDeleteDialog
         open={Boolean(deleteConfirm)}
         title={deleteConfirm?.title || "Delete Record?"}
-        description={deleteConfirm?.description || "This action cannot be undone."}
+        description={
+          deleteConfirm?.description || "This action cannot be undone."
+        }
         error={deleteConfirmError}
         loading={deleteConfirmSaving}
         onCancel={closeDeleteConfirmation}
@@ -13709,100 +13791,102 @@ export function LocationDetailPage() {
         onClose={() => setLocationParticularsOpen(false)}
       >
         <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
-        <DialogTitle>Particulars</DialogTitle>
-        <DialogContent>
-          {locationParticularError ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {locationParticularError}
-            </Alert>
-          ) : null}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: 1.5,
-              mb: 2,
-              mt: 1,
-              alignItems: "center",
-            }}
-          >
-            <TextField
-              size="small"
-              label="Particular"
-              value={locationParticularForm.title}
-              onChange={(event) =>
-                setLocationParticularForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              size="small"
-              select
-              label="Category"
-              value={locationParticularForm.category}
-              onChange={(event) =>
-                setLocationParticularForm((current) => ({
-                  ...current,
-                  category: event.target.value,
-                }))
-              }
-              fullWidth
+          <DialogTitle>Particulars</DialogTitle>
+          <DialogContent>
+            {locationParticularError ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {locationParticularError}
+              </Alert>
+            ) : null}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1fr",
+                gap: 1.5,
+                mb: 2,
+                mt: 1,
+                alignItems: "center",
+              }}
             >
-              {["Income", "Expense"].map((category) => (
-                <MenuItem key={category} value={category}>
-                  {category}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              size="small"
-              select
-              label="Type"
-              value={locationParticularForm.type}
-              onChange={(event) =>
-                setLocationParticularForm((current) => ({
-                  ...current,
-                  type: event.target.value,
-                }))
-              }
-              fullWidth
-            >
-              {particularTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => setLocationParticularsOpen(false)}
-              fullWidth
-            >
-              Close
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={editingLocationParticularId ? <SaveIcon /> : <AddIcon />}
-              onClick={saveLocationParticular}
-              disabled={
-                !locationParticularForm.title.trim() ||
-                !locationParticularForm.category ||
-                !locationParticularForm.type
-              }
-              fullWidth
-            >
-              {editingLocationParticularId ? "Update" : "Add"}
-            </Button>
-          </Stack>
-        </DialogActions>
+              <TextField
+                size="small"
+                label="Particular"
+                value={locationParticularForm.title}
+                onChange={(event) =>
+                  setLocationParticularForm((current) => ({
+                    ...current,
+                    title: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <TextField
+                size="small"
+                select
+                label="Category"
+                value={locationParticularForm.category}
+                onChange={(event) =>
+                  setLocationParticularForm((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
+                fullWidth
+              >
+                {["Income", "Expense"].map((category) => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                size="small"
+                select
+                label="Type"
+                value={locationParticularForm.type}
+                onChange={(event) =>
+                  setLocationParticularForm((current) => ({
+                    ...current,
+                    type: event.target.value,
+                  }))
+                }
+                fullWidth
+              >
+                {particularTypes.map((type) => (
+                  <MenuItem key={type} value={type}>
+                    {type}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => setLocationParticularsOpen(false)}
+                fullWidth
+              >
+                Close
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={
+                  editingLocationParticularId ? <SaveIcon /> : <AddIcon />
+                }
+                onClick={saveLocationParticular}
+                disabled={
+                  !locationParticularForm.title.trim() ||
+                  !locationParticularForm.category ||
+                  !locationParticularForm.type
+                }
+                fullWidth
+              >
+                {editingLocationParticularId ? "Update" : "Add"}
+              </Button>
+            </Stack>
+          </DialogActions>
         </Box>
       </Drawer>
       <Drawer
@@ -13811,100 +13895,105 @@ export function LocationDetailPage() {
         onClose={() => setLocationRemissionsOpen(false)}
       >
         <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
-        <DialogTitle>Location Remissions</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {remissionError ? (
-              <Alert severity="error">{remissionError}</Alert>
-            ) : null}
-            <Autocomplete
-              options={incomeLocationParticulars}
-              value={
-                incomeLocationParticulars.find((particular) =>
-                  idsEqual(
-                    particular.particular_id,
-                    remissionForm.particular_id,
-                  ),
-                ) || null
-              }
-              onChange={(_, value) =>
-                updateRemissionForm({
-                  particular_id: value?.particular_id || "",
-                })
-              }
-              getOptionLabel={(particular) =>
-                particular.title || `Particular #${particular.particular_id}`
-              }
-              isOptionEqualToValue={(option, value) =>
-                idsEqual(option.particular_id, value.particular_id)
-              }
-              renderInput={(params) => (
-                <TextField {...params} label="Particular" required fullWidth />
-              )}
-              fullWidth
-            />
-            <TextField
-              label="Title"
-              value={remissionForm.title}
-              onChange={(event) =>
-                updateRemissionForm({ title: event.target.value })
-              }
-              fullWidth
-              required
-            />
-            <TextField
-              label="Percentage"
-              type="number"
-              value={remissionForm.percentage}
-              onChange={(event) =>
-                updateRemissionForm({ percentage: event.target.value })
-              }
-              fullWidth
-              required
-            />
-            <TextField
-              label="Description"
-              value={remissionForm.description}
-              onChange={(event) =>
-                updateRemissionForm({ description: event.target.value })
-              }
-              multiline
-              minRows={3}
-              fullWidth
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => setLocationRemissionsOpen(false)}
-              disabled={remissionSaving}
-              fullWidth
-            >
-              Close
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />}
-              onClick={handleSaveLocationRemission}
-              disabled={
-                remissionSaving ||
-                !remissionForm.title.trim() ||
-                !remissionForm.percentage ||
-                !remissionForm.particular_id
-              }
-              fullWidth
-            >
-              {remissionSaving
-                ? "Saving..."
-                : editingRemissionId
-                  ? "Update"
-                  : "Add"}
-            </Button>
-          </Stack>
-        </DialogActions>
+          <DialogTitle>Location Remissions</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {remissionError ? (
+                <Alert severity="error">{remissionError}</Alert>
+              ) : null}
+              <Autocomplete
+                options={incomeLocationParticulars}
+                value={
+                  incomeLocationParticulars.find((particular) =>
+                    idsEqual(
+                      particular.particular_id,
+                      remissionForm.particular_id,
+                    ),
+                  ) || null
+                }
+                onChange={(_, value) =>
+                  updateRemissionForm({
+                    particular_id: value?.particular_id || "",
+                  })
+                }
+                getOptionLabel={(particular) =>
+                  particular.title || `Particular #${particular.particular_id}`
+                }
+                isOptionEqualToValue={(option, value) =>
+                  idsEqual(option.particular_id, value.particular_id)
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Particular"
+                    required
+                    fullWidth
+                  />
+                )}
+                fullWidth
+              />
+              <TextField
+                label="Title"
+                value={remissionForm.title}
+                onChange={(event) =>
+                  updateRemissionForm({ title: event.target.value })
+                }
+                fullWidth
+                required
+              />
+              <TextField
+                label="Percentage"
+                type="number"
+                value={remissionForm.percentage}
+                onChange={(event) =>
+                  updateRemissionForm({ percentage: event.target.value })
+                }
+                fullWidth
+                required
+              />
+              <TextField
+                label="Description"
+                value={remissionForm.description}
+                onChange={(event) =>
+                  updateRemissionForm({ description: event.target.value })
+                }
+                multiline
+                minRows={3}
+                fullWidth
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => setLocationRemissionsOpen(false)}
+                disabled={remissionSaving}
+                fullWidth
+              >
+                Close
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={editingRemissionId ? <SaveIcon /> : <AddIcon />}
+                onClick={handleSaveLocationRemission}
+                disabled={
+                  remissionSaving ||
+                  !remissionForm.title.trim() ||
+                  !remissionForm.percentage ||
+                  !remissionForm.particular_id
+                }
+                fullWidth
+              >
+                {remissionSaving
+                  ? "Saving..."
+                  : editingRemissionId
+                    ? "Update"
+                    : "Add"}
+              </Button>
+            </Stack>
+          </DialogActions>
         </Box>
       </Drawer>
       <Dialog
@@ -13981,7 +14070,7 @@ export function LocationDetailPage() {
           },
         }}
       >
-        {locationsCard}
+        {renderLocationsCard(false)}
       </Drawer>
       {createLocationDrawer}
       <Snackbar
@@ -14047,6 +14136,7 @@ type LocationActionDrawerProps = {
   attendances: Attendance[];
   mfAttendances: MfAttendance[];
   attendanceCreateScope: "location" | "mf";
+  canCreatePrivateCashbooks: boolean;
   error: string;
   saving: boolean;
   onChange: (value: Partial<ActionForm>) => void;
@@ -14072,12 +14162,14 @@ export function CashbookActionsMenu({
   cashbook,
   requesterId,
   accounts,
+  canManagePrivateVisibility = false,
   returnTo,
   onRefresh,
 }: {
   cashbook: Cashbook;
   requesterId?: string;
   accounts: Account[];
+  canManagePrivateVisibility?: boolean;
   returnTo?: string;
   onRefresh: () => Promise<void>;
 }) {
@@ -14106,6 +14198,7 @@ export function CashbookActionsMenu({
     title: cashbook.title || "",
     description: cashbook.description || "",
     status: cashbook.status || "Active",
+    visibility: cashbook.visibility || "Public",
     startdate: cashbook.startdate || "",
     enddate: cashbook.enddate || "",
     opening_balance: String(cashbook.opening_balance || 0),
@@ -14215,6 +14308,7 @@ export function CashbookActionsMenu({
       title: cashbook.title || "",
       description: cashbook.description || "",
       status: cashbook.status || "Active",
+      visibility: cashbook.visibility || "Public",
       startdate: cashbook.startdate || "",
       enddate: cashbook.enddate || "",
       opening_balance: String(cashbook.opening_balance || 0),
@@ -14333,6 +14427,9 @@ export function CashbookActionsMenu({
       title: editForm.title,
       description: editForm.description || null,
       status: editForm.status,
+      ...(canManagePrivateVisibility
+        ? { visibility: editForm.visibility }
+        : {}),
       startdate: editForm.startdate || null,
       enddate: editForm.enddate || null,
       opening_balance: Number(editForm.opening_balance || 0),
@@ -14598,6 +14695,12 @@ export function CashbookActionsMenu({
             </ListItem>
             <ListItem disableGutters divider>
               <ListItemText
+                primary="Visibility"
+                secondary={cashbook.visibility || "Public"}
+              />
+            </ListItem>
+            <ListItem disableGutters divider>
+              <ListItemText
                 primary="Start Date"
                 secondary={cashbook.startdate || "Not set"}
               />
@@ -14829,6 +14932,26 @@ export function CashbookActionsMenu({
                 multiline
                 minRows={3}
               />
+              {canManagePrivateVisibility ? (
+                <TextField
+                  select
+                  label="Visibility"
+                  value={editForm.visibility}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      visibility: event.target.value,
+                    }))
+                  }
+                  fullWidth
+                >
+                  {["Public", "Private"].map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {option}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ) : null}
               <TextField
                 type="number"
                 label="Opening Balance"
@@ -14927,6 +15050,7 @@ function LocationActionDrawer({
   attendances,
   mfAttendances,
   attendanceCreateScope,
+  canCreatePrivateCashbooks,
   error,
   saving,
   onChange,
@@ -15717,6 +15841,23 @@ function LocationActionDrawer({
             ) : null}
             {activeTab === 2 ? (
               <>
+                {canCreatePrivateCashbooks ? (
+                  <TextField
+                    select
+                    label="Visibility"
+                    value={form.visibility}
+                    onChange={(event) =>
+                      onChange({ visibility: event.target.value })
+                    }
+                    fullWidth
+                  >
+                    {["Public", "Private"].map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : null}
                 <TextField
                   select
                   label="Opening Balance Source"
@@ -16130,7 +16271,11 @@ function LocationActionDrawer({
                 >
                   {saving ? (
                     <>
-                      <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                      <CircularProgress
+                        size={18}
+                        color="inherit"
+                        sx={{ mr: 1 }}
+                      />
                       Saving...
                     </>
                   ) : (
@@ -16148,7 +16293,11 @@ function LocationActionDrawer({
                 >
                   {saving ? (
                     <>
-                      <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
+                      <CircularProgress
+                        size={18}
+                        color="inherit"
+                        sx={{ mr: 1 }}
+                      />
                       Saving...
                     </>
                   ) : (
@@ -16341,7 +16490,9 @@ export function CashbookDetailPage() {
       await deleteConfirm.onConfirm();
       setDeleteConfirm(null);
     } catch (requestError) {
-      setDeleteConfirmError(getApiErrorMessage(requestError, "Failed to delete record"));
+      setDeleteConfirmError(
+        getApiErrorMessage(requestError, "Failed to delete record"),
+      );
     } finally {
       setDeleteConfirmSaving(false);
     }
@@ -17489,6 +17640,11 @@ export function CashbookDetailPage() {
                   value={transactions.length}
                 />
                 <TransactionMetricItem
+                  icon={<VisibilityIcon color="secondary" fontSize="small" />}
+                  label="Visibility"
+                  value={cashbook.visibility || "Public"}
+                />
+                <TransactionMetricItem
                   icon={<TrendingUpIcon color="success" fontSize="small" />}
                   label="In"
                   value={incomeTotal}
@@ -17556,572 +17712,577 @@ export function CashbookDetailPage() {
                     height: "100%",
                   }}
                 >
-                <DialogTitle>Add Transaction</DialogTitle>
-                <DialogContent sx={{ flex: 1 }}>
-                  {transactionError ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                      {transactionError}
-                    </Alert>
-                  ) : null}
-                  {transactionSuccess ? (
-                    <Alert severity="success" sx={{ mb: 2 }}>
-                      {transactionSuccess}
-                    </Alert>
-                  ) : null}
-                  <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <Tabs
-                      value={transactionTab}
-                      onChange={(_, value: string) => setTransactionTab(value)}
-                      sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
-                    >
-                      <Tab value="normal" label="General" />
-                      <Tab value="schedule" label="Schedule Collections" />
-                    </Tabs>
-                    {transactionTab === "normal" ? (
-                      <Stack spacing={2}>
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              sm: "repeat(2, minmax(0, 1fr))",
-                              lg: "repeat(3, minmax(0, 1fr))",
-                            },
-                            gap: 2,
-                          }}
-                        >
-                          <DatePicker
-                            label="Date"
-                            value={toPickerValue(
-                              transactionForm.transaction_date,
-                            )}
-                            disableFuture
-                            onChange={(value) => {
-                              setTransactionValidation((current) => ({
-                                ...current,
-                                transaction_date: "",
-                              }));
-                              setTransactionForm((current) => ({
-                                ...current,
-                                transaction_date: fromPickerValue(value),
-                              }));
-                            }}
-                            slotProps={{
-                              textField: {
-                                size: "small",
-                                fullWidth: true,
-                                required: true,
-                                error: Boolean(
-                                  transactionValidation.transaction_date,
-                                ),
-                                helperText:
-                                  transactionValidation.transaction_date,
+                  <DialogTitle>Add Transaction</DialogTitle>
+                  <DialogContent sx={{ flex: 1 }}>
+                    {transactionError ? (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        {transactionError}
+                      </Alert>
+                    ) : null}
+                    {transactionSuccess ? (
+                      <Alert severity="success" sx={{ mb: 2 }}>
+                        {transactionSuccess}
+                      </Alert>
+                    ) : null}
+                    <LocalizationProvider dateAdapter={AdapterDayjs}>
+                      <Tabs
+                        value={transactionTab}
+                        onChange={(_, value: string) =>
+                          setTransactionTab(value)
+                        }
+                        sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
+                      >
+                        <Tab value="normal" label="General" />
+                        <Tab value="schedule" label="Schedule Collections" />
+                      </Tabs>
+                      {transactionTab === "normal" ? (
+                        <Stack spacing={2}>
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: {
+                                xs: "1fr",
+                                sm: "repeat(2, minmax(0, 1fr))",
+                                lg: "repeat(3, minmax(0, 1fr))",
                               },
-                            }}
-                          />
-                          <TextField
-                            select
-                            label="Particular"
-                            value={transactionForm.particular_id}
-                            onChange={(event) => {
-                              setTransactionValidation((current) => ({
-                                ...current,
-                                particular_id: "",
-                              }));
-                              setTransactionForm((current) => ({
-                                ...current,
-                                particular_id: event.target.value,
-                              }));
-                            }}
-                            size="small"
-                            fullWidth
-                            required
-                            error={Boolean(transactionValidation.particular_id)}
-                            helperText={transactionValidation.particular_id}
-                            slotProps={{
-                              input: {
-                                endAdornment: (
-                                  <InputAdornment
-                                    position="end"
-                                    sx={{ mr: 2 }}
-                                  >
-                                    <Tooltip title="Add particular">
-                                      <IconButton
-                                        edge="end"
-                                        size="small"
-                                        aria-label="Add particular"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          openParticularsModal();
-                                        }}
-                                      >
-                                        <AddIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  </InputAdornment>
-                                ),
-                              },
+                              gap: 2,
                             }}
                           >
-                            <MenuItem value="">Select particular</MenuItem>
-                            {generalParticulars.map((particular) => (
-                              <MenuItem
-                                key={particular.particular_id}
-                                value={particular.particular_id}
-                              >
-                                {particular.title}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                          <TextField
-                            select
-                            label="Type"
-                            value={transactionForm.category}
-                            onChange={(event) => {
-                              setTransactionValidation((current) => ({
-                                ...current,
-                                category: "",
-                              }));
-                              setTransactionForm((current) => ({
-                                ...current,
-                                category: event.target.value,
-                              }));
-                            }}
-                            size="small"
-                            fullWidth
-                            required
-                            error={Boolean(transactionValidation.category)}
-                            helperText={transactionValidation.category}
-                          >
-                            {["Income", "Expense"].map((category) => (
-                              <MenuItem key={category} value={category}>
-                                {category}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                          <TextField
-                            type="number"
-                            label="Amount"
-                            value={transactionForm.amount}
-                            onChange={(event) => {
-                              setTransactionValidation((current) => ({
-                                ...current,
-                                amount: "",
-                              }));
-                              setTransactionForm((current) => ({
-                                ...current,
-                                amount: event.target.value,
-                              }));
-                            }}
-                            size="small"
-                            fullWidth
-                            required
-                            error={Boolean(transactionValidation.amount)}
-                            helperText={transactionValidation.amount}
-                          />
-                          <TextField
-                            select
-                            label="Mode"
-                            value={transactionForm.mode}
-                            onChange={(event) => {
-                              setTransactionValidation((current) => ({
-                                ...current,
-                                mode: "",
-                              }));
-                              setTransactionForm((current) => ({
-                                ...current,
-                                mode: event.target.value,
-                              }));
-                            }}
-                            size="small"
-                            fullWidth
-                            required
-                            error={Boolean(transactionValidation.mode)}
-                            helperText={transactionValidation.mode}
-                          >
-                            {["Cash", "Cheque", "MOMO"].map((mode) => (
-                              <MenuItem key={mode} value={mode}>
-                                {mode}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                          <TextField
-                            size="small"
-                            label="Received By/From"
-                            value={transactionForm.received_by_or_from}
-                            onChange={(event) =>
-                              setTransactionForm((current) => ({
-                                ...current,
-                                received_by_or_from: event.target.value,
-                              }))
-                            }
-                            fullWidth
-                          />
-                        </Box>
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              md: "minmax(0, 1fr) auto",
-                            },
-                            gap: 2,
-                            alignItems: "start",
-                          }}
-                        >
-                          <TextField
-                            size="small"
-                            label="Remarks"
-                            value={transactionForm.remarks}
-                            onChange={(event) =>
-                              setTransactionForm((current) => ({
-                                ...current,
-                                remarks: event.target.value,
-                              }))
-                            }
-                            multiline
-                            minRows={1}
-                            fullWidth
-                          />
-                        </Box>
-                      </Stack>
-                    ) : (
-                      <Stack spacing={2}>
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              sm: "repeat(2, minmax(0, 1fr))",
-                              lg: "repeat(3, minmax(0, 1fr))",
-                            },
-                            gap: 2,
-                          }}
-                        >
-                          <DatePicker
-                            label="Schedule Date"
-                            value={toPickerValue(
-                              scheduleCollectionForm.schedule_date,
-                            )}
-                            onChange={(value) => {
-                              setScheduleCollectionValidation((current) => ({
-                                ...current,
-                                schedule_date: "",
-                                amounts: "",
-                              }));
-                              setScheduleCollectionForm((current) => ({
-                                ...current,
-                                schedule_date: fromPickerValue(value),
-                                schedule_type: "",
-                                amounts: {},
-                              }));
-                            }}
-                            disableFuture
-                            shouldDisableDate={(day) =>
-                              disableFutureSchedulePickerDay(day, schedules)
-                            }
-                            slots={{ day: renderScheduleFilterDay }}
-                            slotProps={{
-                              textField: {
-                                size: "small",
-                                fullWidth: true,
-                                required: true,
-                                error: Boolean(
-                                  scheduleCollectionValidation.schedule_date,
-                                ),
-                                helperText:
-                                  scheduleCollectionValidation.schedule_date,
-                              },
-                            }}
-                          />
-                          <Autocomplete
-                            options={incomeParticulars}
-                            value={
-                              incomeParticulars.find(
-                                (particular) =>
-                                  particular.particular_id ===
-                                  scheduleCollectionForm.particular_id,
-                              ) || null
-                            }
-                            onChange={(_, value) => {
-                              setScheduleCollectionValidation((current) => ({
-                                ...current,
-                                particular_id: "",
-                                amounts: "",
-                              }));
-                              setScheduleCollectionForm((current) => ({
-                                ...current,
-                                particular_id: value?.particular_id || "",
-                              }));
-                            }}
-                            getOptionLabel={(particular) =>
-                              particular.title ||
-                              `Particular #${particular.particular_id}`
-                            }
-                            isOptionEqualToValue={(option, value) =>
-                              option.particular_id === value.particular_id
-                            }
-                            renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                size="small"
-                                label="Collection"
-                                required
-                                fullWidth
-                                error={Boolean(
-                                  scheduleCollectionValidation.particular_id,
-                                )}
-                                helperText={
-                                  scheduleCollectionValidation.particular_id
-                                }
-                                slotProps={{
-                                  ...params.slotProps,
-                                  input: {
-                                    ...params.slotProps.input,
-                                    endAdornment: (
-                                      <>
-                                        <InputAdornment position="end">
-                                          <Tooltip title="Add collection">
-                                            <IconButton
-                                              edge="end"
-                                              size="small"
-                                              aria-label="Add collection"
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                openParticularsModal();
-                                              }}
-                                            >
-                                              <AddIcon fontSize="small" />
-                                            </IconButton>
-                                          </Tooltip>
-                                        </InputAdornment>
-                                        {params.slotProps.input?.endAdornment}
-                                      </>
-                                    ),
-                                  },
-                                }}
-                              />
-                            )}
-                            fullWidth
-                          />
-                          <TextField
-                            select
-                            label="Schedule Type"
-                            value={scheduleCollectionForm.schedule_type}
-                            onChange={(event) => {
-                              setScheduleCollectionValidation((current) => ({
-                                ...current,
-                                amounts: "",
-                              }));
-                              setScheduleCollectionForm((current) => ({
-                                ...current,
-                                schedule_type: event.target.value,
-                                amounts: {},
-                              }));
-                            }}
-                            size="small"
-                            fullWidth
-                            disabled={
-                              !scheduleCollectionForm.schedule_date ||
-                              scheduleCollectionTypeOptions.length === 0
-                            }
-                          >
-                            <MenuItem value="">All schedule types</MenuItem>
-                            {scheduleCollectionTypeOptions.map(
-                              (scheduleType) => (
-                                <MenuItem
-                                  key={scheduleType}
-                                  value={scheduleType}
-                                >
-                                  {scheduleType}
-                                </MenuItem>
-                              ),
-                            )}
-                          </TextField>
-                        </Box>
-                        {scheduleCollectionValidation.amounts ? (
-                          <Alert severity="error">
-                            {scheduleCollectionValidation.amounts}
-                          </Alert>
-                        ) : null}
-                        <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                          <Box sx={{ px: 2, py: 1, bgcolor: "action.hover" }}>
-                            <Typography
-                              variant="subtitle2"
-                              sx={{ fontWeight: 900 }}
+                            <DatePicker
+                              label="Date"
+                              value={toPickerValue(
+                                transactionForm.transaction_date,
+                              )}
+                              disableFuture
+                              onChange={(value) => {
+                                setTransactionValidation((current) => ({
+                                  ...current,
+                                  transaction_date: "",
+                                }));
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  transaction_date: fromPickerValue(value),
+                                }));
+                              }}
+                              slotProps={{
+                                textField: {
+                                  size: "small",
+                                  fullWidth: true,
+                                  required: true,
+                                  error: Boolean(
+                                    transactionValidation.transaction_date,
+                                  ),
+                                  helperText:
+                                    transactionValidation.transaction_date,
+                                },
+                              }}
+                            />
+                            <TextField
+                              select
+                              label="Particular"
+                              value={transactionForm.particular_id}
+                              onChange={(event) => {
+                                setTransactionValidation((current) => ({
+                                  ...current,
+                                  particular_id: "",
+                                }));
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  particular_id: event.target.value,
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              required
+                              error={Boolean(
+                                transactionValidation.particular_id,
+                              )}
+                              helperText={transactionValidation.particular_id}
+                              slotProps={{
+                                input: {
+                                  endAdornment: (
+                                    <InputAdornment
+                                      position="end"
+                                      sx={{ mr: 2 }}
+                                    >
+                                      <Tooltip title="Add particular">
+                                        <IconButton
+                                          edge="end"
+                                          size="small"
+                                          aria-label="Add particular"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            openParticularsModal();
+                                          }}
+                                        >
+                                          <AddIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </InputAdornment>
+                                  ),
+                                },
+                              }}
                             >
-                              Schedules on selected date
-                            </Typography>
+                              <MenuItem value="">Select particular</MenuItem>
+                              {generalParticulars.map((particular) => (
+                                <MenuItem
+                                  key={particular.particular_id}
+                                  value={particular.particular_id}
+                                >
+                                  {particular.title}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              select
+                              label="Type"
+                              value={transactionForm.category}
+                              onChange={(event) => {
+                                setTransactionValidation((current) => ({
+                                  ...current,
+                                  category: "",
+                                }));
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  category: event.target.value,
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              required
+                              error={Boolean(transactionValidation.category)}
+                              helperText={transactionValidation.category}
+                            >
+                              {["Income", "Expense"].map((category) => (
+                                <MenuItem key={category} value={category}>
+                                  {category}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              type="number"
+                              label="Amount"
+                              value={transactionForm.amount}
+                              onChange={(event) => {
+                                setTransactionValidation((current) => ({
+                                  ...current,
+                                  amount: "",
+                                }));
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  amount: event.target.value,
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              required
+                              error={Boolean(transactionValidation.amount)}
+                              helperText={transactionValidation.amount}
+                            />
+                            <TextField
+                              select
+                              label="Mode"
+                              value={transactionForm.mode}
+                              onChange={(event) => {
+                                setTransactionValidation((current) => ({
+                                  ...current,
+                                  mode: "",
+                                }));
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  mode: event.target.value,
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              required
+                              error={Boolean(transactionValidation.mode)}
+                              helperText={transactionValidation.mode}
+                            >
+                              {["Cash", "Cheque", "MOMO"].map((mode) => (
+                                <MenuItem key={mode} value={mode}>
+                                  {mode}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              size="small"
+                              label="Received By/From"
+                              value={transactionForm.received_by_or_from}
+                              onChange={(event) =>
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  received_by_or_from: event.target.value,
+                                }))
+                              }
+                              fullWidth
+                            />
                           </Box>
-                          <Stack divider={<Divider />}>
-                            {!scheduleCollectionForm.schedule_date ? (
-                              <Box sx={{ px: 2, py: 2 }}>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  Select a schedule date to load schedules.
-                                </Typography>
-                              </Box>
-                            ) : scheduleCollectionSchedules.length === 0 ? (
-                              <Box sx={{ px: 2, py: 2 }}>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                >
-                                  No schedules occur on this date.
-                                </Typography>
-                              </Box>
-                            ) : (
-                              scheduleCollectionSchedules.map((schedule) => {
-                                const duplicate = scheduleCollectionRecorded(
-                                  schedule.id,
-                                );
-                                return (
-                                  <Box
-                                    key={schedule.id}
-                                    sx={{
-                                      px: 2,
-                                      py: 1.5,
-                                      display: "grid",
-                                      gridTemplateColumns: {
-                                        xs: "1fr",
-                                        sm: "minmax(0, 1fr) 180px",
-                                      },
-                                      gap: 1.5,
-                                      alignItems: "center",
-                                    }}
-                                  >
-                                    <Box sx={{ minWidth: 0 }}>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{ fontWeight: 800 }}
-                                      >
-                                        {scheduleOptionLabel(schedule)}
-                                      </Typography>
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                      >
-                                        {scheduleWhenText(schedule)}
-                                      </Typography>
-                                    </Box>
-                                    <TextField
-                                      type="number"
-                                      size="small"
-                                      label={
-                                        duplicate
-                                          ? "Already recorded"
-                                          : "Amount"
-                                      }
-                                      value={
-                                        scheduleCollectionForm.amounts[
-                                          schedule.id
-                                        ] || ""
-                                      }
-                                      onChange={(event) =>
-                                        setScheduleCollectionForm(
-                                          (current) => ({
-                                            ...current,
-                                            amounts: {
-                                              ...current.amounts,
-                                              [schedule.id]: event.target.value,
-                                            },
-                                          }),
-                                        )
-                                      }
-                                      disabled={Boolean(duplicate)}
-                                      slotProps={{ htmlInput: { min: 0 } }}
-                                      fullWidth
-                                    />
-                                  </Box>
-                                );
-                              })
-                            )}
-                          </Stack>
-                        </Paper>
-                        <Box
-                          sx={{
-                            display: "grid",
-                            gridTemplateColumns: {
-                              xs: "1fr",
-                              md: "220px minmax(0, 1fr) auto",
-                            },
-                            gap: 2,
-                            alignItems: "start",
-                          }}
-                        >
-                          <TextField
-                            select
-                            label="Mode"
-                            value={scheduleCollectionForm.mode}
-                            onChange={(event) => {
-                              setScheduleCollectionValidation((current) => ({
-                                ...current,
-                                mode: "",
-                              }));
-                              setScheduleCollectionForm((current) => ({
-                                ...current,
-                                mode: event.target.value,
-                              }));
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: {
+                                xs: "1fr",
+                                md: "minmax(0, 1fr) auto",
+                              },
+                              gap: 2,
+                              alignItems: "start",
                             }}
-                            size="small"
-                            fullWidth
-                            required
-                            error={Boolean(scheduleCollectionValidation.mode)}
-                            helperText={scheduleCollectionValidation.mode}
                           >
-                            {["Cash", "Cheque", "MOMO"].map((mode) => (
-                              <MenuItem key={mode} value={mode}>
-                                {mode}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                          <TextField
-                            size="small"
-                            label="Remarks"
-                            value={scheduleCollectionForm.remarks}
-                            onChange={(event) =>
-                              setScheduleCollectionForm((current) => ({
-                                ...current,
-                                remarks: event.target.value,
-                              }))
-                            }
-                            multiline
-                            minRows={1}
-                            fullWidth
-                          />
-                        </Box>
-                      </Stack>
-                    )}
-                    <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => setAddTransactionOpen(false)}
-                    disabled={transactionSaving}
-                    fullWidth
-                  >
-                    Close
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={saveActiveTransactionTab}
-                    startIcon={
-                      transactionSaving ? (
-                        <CircularProgress size={18} color="inherit" />
+                            <TextField
+                              size="small"
+                              label="Remarks"
+                              value={transactionForm.remarks}
+                              onChange={(event) =>
+                                setTransactionForm((current) => ({
+                                  ...current,
+                                  remarks: event.target.value,
+                                }))
+                              }
+                              multiline
+                              minRows={1}
+                              fullWidth
+                            />
+                          </Box>
+                        </Stack>
                       ) : (
-                        <SaveIcon />
-                      )
-                    }
-                    disabled={addTransactionSaveDisabled}
-                    fullWidth
-                  >
-                    {transactionSaving ? "Saving..." : "Save"}
-                  </Button>
-                    </Stack>
-                  </LocalizationProvider>
-                </DialogContent>
+                        <Stack spacing={2}>
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: {
+                                xs: "1fr",
+                                sm: "repeat(2, minmax(0, 1fr))",
+                                lg: "repeat(3, minmax(0, 1fr))",
+                              },
+                              gap: 2,
+                            }}
+                          >
+                            <DatePicker
+                              label="Schedule Date"
+                              value={toPickerValue(
+                                scheduleCollectionForm.schedule_date,
+                              )}
+                              onChange={(value) => {
+                                setScheduleCollectionValidation((current) => ({
+                                  ...current,
+                                  schedule_date: "",
+                                  amounts: "",
+                                }));
+                                setScheduleCollectionForm((current) => ({
+                                  ...current,
+                                  schedule_date: fromPickerValue(value),
+                                  schedule_type: "",
+                                  amounts: {},
+                                }));
+                              }}
+                              disableFuture
+                              shouldDisableDate={(day) =>
+                                disableFutureSchedulePickerDay(day, schedules)
+                              }
+                              slots={{ day: renderScheduleFilterDay }}
+                              slotProps={{
+                                textField: {
+                                  size: "small",
+                                  fullWidth: true,
+                                  required: true,
+                                  error: Boolean(
+                                    scheduleCollectionValidation.schedule_date,
+                                  ),
+                                  helperText:
+                                    scheduleCollectionValidation.schedule_date,
+                                },
+                              }}
+                            />
+                            <Autocomplete
+                              options={incomeParticulars}
+                              value={
+                                incomeParticulars.find(
+                                  (particular) =>
+                                    particular.particular_id ===
+                                    scheduleCollectionForm.particular_id,
+                                ) || null
+                              }
+                              onChange={(_, value) => {
+                                setScheduleCollectionValidation((current) => ({
+                                  ...current,
+                                  particular_id: "",
+                                  amounts: "",
+                                }));
+                                setScheduleCollectionForm((current) => ({
+                                  ...current,
+                                  particular_id: value?.particular_id || "",
+                                }));
+                              }}
+                              getOptionLabel={(particular) =>
+                                particular.title ||
+                                `Particular #${particular.particular_id}`
+                              }
+                              isOptionEqualToValue={(option, value) =>
+                                option.particular_id === value.particular_id
+                              }
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  size="small"
+                                  label="Collection"
+                                  required
+                                  fullWidth
+                                  error={Boolean(
+                                    scheduleCollectionValidation.particular_id,
+                                  )}
+                                  helperText={
+                                    scheduleCollectionValidation.particular_id
+                                  }
+                                  slotProps={{
+                                    ...params.slotProps,
+                                    input: {
+                                      ...params.slotProps.input,
+                                      endAdornment: (
+                                        <>
+                                          <InputAdornment position="end">
+                                            <Tooltip title="Add collection">
+                                              <IconButton
+                                                edge="end"
+                                                size="small"
+                                                aria-label="Add collection"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  openParticularsModal();
+                                                }}
+                                              >
+                                                <AddIcon fontSize="small" />
+                                              </IconButton>
+                                            </Tooltip>
+                                          </InputAdornment>
+                                          {params.slotProps.input?.endAdornment}
+                                        </>
+                                      ),
+                                    },
+                                  }}
+                                />
+                              )}
+                              fullWidth
+                            />
+                            <TextField
+                              select
+                              label="Schedule Type"
+                              value={scheduleCollectionForm.schedule_type}
+                              onChange={(event) => {
+                                setScheduleCollectionValidation((current) => ({
+                                  ...current,
+                                  amounts: "",
+                                }));
+                                setScheduleCollectionForm((current) => ({
+                                  ...current,
+                                  schedule_type: event.target.value,
+                                  amounts: {},
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              disabled={
+                                !scheduleCollectionForm.schedule_date ||
+                                scheduleCollectionTypeOptions.length === 0
+                              }
+                            >
+                              <MenuItem value="">All schedule types</MenuItem>
+                              {scheduleCollectionTypeOptions.map(
+                                (scheduleType) => (
+                                  <MenuItem
+                                    key={scheduleType}
+                                    value={scheduleType}
+                                  >
+                                    {scheduleType}
+                                  </MenuItem>
+                                ),
+                              )}
+                            </TextField>
+                          </Box>
+                          {scheduleCollectionValidation.amounts ? (
+                            <Alert severity="error">
+                              {scheduleCollectionValidation.amounts}
+                            </Alert>
+                          ) : null}
+                          <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                            <Box sx={{ px: 2, py: 1, bgcolor: "action.hover" }}>
+                              <Typography
+                                variant="subtitle2"
+                                sx={{ fontWeight: 900 }}
+                              >
+                                Schedules on selected date
+                              </Typography>
+                            </Box>
+                            <Stack divider={<Divider />}>
+                              {!scheduleCollectionForm.schedule_date ? (
+                                <Box sx={{ px: 2, py: 2 }}>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    Select a schedule date to load schedules.
+                                  </Typography>
+                                </Box>
+                              ) : scheduleCollectionSchedules.length === 0 ? (
+                                <Box sx={{ px: 2, py: 2 }}>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    No schedules occur on this date.
+                                  </Typography>
+                                </Box>
+                              ) : (
+                                scheduleCollectionSchedules.map((schedule) => {
+                                  const duplicate = scheduleCollectionRecorded(
+                                    schedule.id,
+                                  );
+                                  return (
+                                    <Box
+                                      key={schedule.id}
+                                      sx={{
+                                        px: 2,
+                                        py: 1.5,
+                                        display: "grid",
+                                        gridTemplateColumns: {
+                                          xs: "1fr",
+                                          sm: "minmax(0, 1fr) 180px",
+                                        },
+                                        gap: 1.5,
+                                        alignItems: "center",
+                                      }}
+                                    >
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                          variant="body2"
+                                          sx={{ fontWeight: 800 }}
+                                        >
+                                          {scheduleOptionLabel(schedule)}
+                                        </Typography>
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                        >
+                                          {scheduleWhenText(schedule)}
+                                        </Typography>
+                                      </Box>
+                                      <TextField
+                                        type="number"
+                                        size="small"
+                                        label={
+                                          duplicate
+                                            ? "Already recorded"
+                                            : "Amount"
+                                        }
+                                        value={
+                                          scheduleCollectionForm.amounts[
+                                            schedule.id
+                                          ] || ""
+                                        }
+                                        onChange={(event) =>
+                                          setScheduleCollectionForm(
+                                            (current) => ({
+                                              ...current,
+                                              amounts: {
+                                                ...current.amounts,
+                                                [schedule.id]:
+                                                  event.target.value,
+                                              },
+                                            }),
+                                          )
+                                        }
+                                        disabled={Boolean(duplicate)}
+                                        slotProps={{ htmlInput: { min: 0 } }}
+                                        fullWidth
+                                      />
+                                    </Box>
+                                  );
+                                })
+                              )}
+                            </Stack>
+                          </Paper>
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: {
+                                xs: "1fr",
+                                md: "220px minmax(0, 1fr) auto",
+                              },
+                              gap: 2,
+                              alignItems: "start",
+                            }}
+                          >
+                            <TextField
+                              select
+                              label="Mode"
+                              value={scheduleCollectionForm.mode}
+                              onChange={(event) => {
+                                setScheduleCollectionValidation((current) => ({
+                                  ...current,
+                                  mode: "",
+                                }));
+                                setScheduleCollectionForm((current) => ({
+                                  ...current,
+                                  mode: event.target.value,
+                                }));
+                              }}
+                              size="small"
+                              fullWidth
+                              required
+                              error={Boolean(scheduleCollectionValidation.mode)}
+                              helperText={scheduleCollectionValidation.mode}
+                            >
+                              {["Cash", "Cheque", "MOMO"].map((mode) => (
+                                <MenuItem key={mode} value={mode}>
+                                  {mode}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              size="small"
+                              label="Remarks"
+                              value={scheduleCollectionForm.remarks}
+                              onChange={(event) =>
+                                setScheduleCollectionForm((current) => ({
+                                  ...current,
+                                  remarks: event.target.value,
+                                }))
+                              }
+                              multiline
+                              minRows={1}
+                              fullWidth
+                            />
+                          </Box>
+                        </Stack>
+                      )}
+                      <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          onClick={() => setAddTransactionOpen(false)}
+                          disabled={transactionSaving}
+                          fullWidth
+                        >
+                          Close
+                        </Button>
+                        <Button
+                          variant="contained"
+                          onClick={saveActiveTransactionTab}
+                          startIcon={
+                            transactionSaving ? (
+                              <CircularProgress size={18} color="inherit" />
+                            ) : (
+                              <SaveIcon />
+                            )
+                          }
+                          disabled={addTransactionSaveDisabled}
+                          fullWidth
+                        >
+                          {transactionSaving ? "Saving..." : "Save"}
+                        </Button>
+                      </Stack>
+                    </LocalizationProvider>
+                  </DialogContent>
                 </Box>
               </Drawer>
             ) : null}
@@ -18806,7 +18967,9 @@ export function CashbookDetailPage() {
       <ConfirmDeleteDialog
         open={Boolean(deleteConfirm)}
         title={deleteConfirm?.title || "Delete Record?"}
-        description={deleteConfirm?.description || "This action cannot be undone."}
+        description={
+          deleteConfirm?.description || "This action cannot be undone."
+        }
         error={deleteConfirmError}
         loading={deleteConfirmSaving}
         onCancel={closeDeleteConfirmation}

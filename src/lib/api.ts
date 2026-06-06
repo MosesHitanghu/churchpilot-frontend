@@ -42,9 +42,21 @@ api.interceptors.response.use((response) => {
   return response;
 });
 
+function notifyConnectionProblem() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("churchpilot:connection-problem"));
+}
+
 export function getApiErrorMessage(error: unknown, fallback = "Request failed") {
   if (!axios.isAxiosError(error)) {
     return error instanceof Error ? error.message : fallback;
+  }
+
+  if (!error.response || error.code === "ERR_NETWORK") {
+    notifyConnectionProblem();
+    return "Connection Problem";
   }
 
   const detail = error.response?.data?.detail;
@@ -64,7 +76,7 @@ export function getApiErrorMessage(error: unknown, fallback = "Request failed") 
       .join("; ");
   }
 
-  return error.message || fallback;
+  return error.message === "Network Error" ? "Connection Problem" : error.message || fallback;
 }
 
 export type Account = {
@@ -117,6 +129,8 @@ export type Cashbook = {
   title?: string | null;
   description?: string | null;
   status?: string | null;
+  visibility?: string | null;
+  creator_id?: string | null;
   location_id?: string | null;
   location_title?: string | null;
   startdate?: string | null;

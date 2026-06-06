@@ -76,6 +76,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const [profileOpen, setProfileOpen] = useState(false);
   const [lastLocationPath, setLastLocationPath] = useState("");
   const [locationPageTitle, setLocationPageTitle] = useState("");
+  const [connectionProblemOpen, setConnectionProblemOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const rememberedLocationKey = `church-admin:last-location:${account.id}`;
@@ -127,6 +128,16 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
       active = false;
     };
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleConnectionProblem = () => setConnectionProblemOpen(true);
+    window.addEventListener("churchpilot:connection-problem", handleConnectionProblem);
+    return () =>
+      window.removeEventListener(
+        "churchpilot:connection-problem",
+        handleConnectionProblem,
+      );
+  }, []);
 
   useEffect(() => {
     const rememberedLocationId = sessionStorage.getItem(rememberedLocationKey);
@@ -488,6 +499,22 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
           <SiteFooter contained={false} />
         </Box>
       </Box>
+      <Snackbar
+        open={connectionProblemOpen}
+        autoHideDuration={4000}
+        onClose={() => setConnectionProblemOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: isMobile ? "center" : "right" }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 3 }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setConnectionProblemOpen(false)}
+          sx={{ width: "100%" }}
+        >
+          Connection Problem
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
