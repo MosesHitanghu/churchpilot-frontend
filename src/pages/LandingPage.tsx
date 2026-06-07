@@ -26,6 +26,24 @@ import { getSessionAccount } from "../lib/session";
 
 const AuthDrawer = lazy(() => import("./AuthPages").then((module) => ({ default: module.AuthDrawer })));
 
+function LandingAuthLoading() {
+  return (
+    <Box
+      sx={{
+        position: "fixed",
+        inset: 0,
+        zIndex: (theme) => theme.zIndex.modal,
+        display: "grid",
+        placeItems: "center",
+        bgcolor: "rgba(255,255,255,0.72)",
+        backdropFilter: "blur(2px)",
+      }}
+    >
+      <CircularProgress />
+    </Box>
+  );
+}
+
 const features = [
   {
     title: "Locations",
@@ -195,7 +213,7 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
       </Container>
       <SiteFooter />
       {authOpen ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LandingAuthLoading />}>
           <AuthDrawer
             open={authOpen}
             mode={authMode}
