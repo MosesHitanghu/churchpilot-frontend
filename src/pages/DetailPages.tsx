@@ -19,6 +19,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ForwardToInboxIcon from "@mui/icons-material/ForwardToInbox";
+import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
 import GroupsIcon from "@mui/icons-material/Groups";
 import HelpOutlinedIcon from "@mui/icons-material/HelpOutlined";
 import HomeWorkIcon from "@mui/icons-material/HomeWork";
@@ -8239,11 +8240,17 @@ export function LocationDetailPage() {
                   borderBottom: 1,
                   borderColor: "divider",
                   px: 1,
+                  "& .MuiTab-root": {
+                    fontSize: { xs: 0, sm: "0.875rem" },
+                    minWidth: { xs: 48, sm: 90 },
+                    px: { xs: 1, sm: 2 },
+                  },
                   "& .MuiTab-root > svg": {
-                    display: { xs: "none", sm: "inline-flex" },
+                    display: "inline-flex",
                   },
                   "& .MuiTab-icon, & .MuiTab-iconWrapper": {
-                    display: { xs: "none", sm: "inline-flex" },
+                    display: "inline-flex",
+                    mr: { xs: 0, sm: 1 },
                   },
                 }}
               >
@@ -8304,7 +8311,7 @@ export function LocationDetailPage() {
                     value={3}
                     id="location-tab-3"
                     aria-controls="location-tabpanel-3"
-                    icon={<ChecklistIcon />}
+                    icon={<FormatListNumberedIcon />}
                     iconPosition="start"
                     label={
                       <Box
@@ -8575,6 +8582,18 @@ export function LocationDetailPage() {
               onClose={() => setAttendanceTabMenuAnchor(null)}
               slotProps={{ list: { "aria-labelledby": "location-tab-3" } }}
             >
+              <MenuItem
+                disabled
+                sx={{
+                  display: { xs: "flex", sm: "none" },
+                  color: "text.primary",
+                  fontWeight: 400,
+                  opacity: "1 !important",
+                }}
+              >
+                Attendances
+              </MenuItem>
+              <Divider sx={{ display: { xs: "block", sm: "none" } }} />
               {attendanceMenuOptions.map((option) => (
                 <MenuItem
                   key={option.value}
