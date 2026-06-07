@@ -181,7 +181,7 @@ const locationTabActions = [
   "Create Requisition",
 ];
 const menuBackedLocationTabs = [1, 2, 3, 10, 13];
-const manageLocationContentTabs = [5, 14, 15, 16];
+const manageLocationContentTabs = [5, 8, 14, 15, 16];
 
 const locationPastorRoles = [
   "Location Pastor",
@@ -8077,6 +8077,20 @@ export function LocationDetailPage() {
             About
           </MenuItem>
         ) : null}
+        {canOpenManageTab && visibleLocationTabs.includes(8) ? (
+          <MenuItem
+            onClick={() => {
+              setActiveTab(8);
+              setRoleMenuAnchor(null);
+              setRoleSwitchMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <EventRepeatIcon fontSize="small" />
+            </ListItemIcon>
+            Schedules
+          </MenuItem>
+        ) : null}
         {canEditLocation && location.is_hq ? (
           <MenuItem
             onClick={() => void updateLocationHq(false)}
@@ -8330,16 +8344,6 @@ export function LocationDetailPage() {
                         <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />
                       </Box>
                     }
-                  />
-                ) : null}
-                {visibleLocationTabs.includes(8) ? (
-                  <Tab
-                    value={8}
-                    id="location-tab-8"
-                    aria-controls="location-tabpanel-8"
-                    icon={<EventRepeatIcon />}
-                    iconPosition="start"
-                    label="Schedules"
                   />
                 ) : null}
                 {visibleLocationTabs.includes(1) ? (

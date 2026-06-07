@@ -86,7 +86,6 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState<"login" | "signup">(initialAuthMode || "login");
   const [authOpen, setAuthOpen] = useState(Boolean(initialAuthMode));
-  const [loginLoading, setLoginLoading] = useState(false);
   useEffect(() => {
     if (initialAuthMode) {
       setAuthMode(initialAuthMode);
@@ -100,18 +99,14 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
   };
 
   const loginFromSavedSession = () => {
-    setLoginLoading(true);
     const account = getSessionAccount();
-    window.setTimeout(() => {
-      if (account) {
-        onAuthenticated(account);
-        navigate("/app");
-      } else {
-        setAuthMode("login");
-        setAuthOpen(true);
-      }
-      setLoginLoading(false);
-    }, 150);
+    if (account) {
+      onAuthenticated(account);
+      navigate("/app");
+      return;
+    }
+    setAuthMode("login");
+    setAuthOpen(true);
   };
 
   return (
@@ -123,11 +118,10 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
           </Typography>
           <Button
             color="inherit"
-            startIcon={loginLoading ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
+            startIcon={<LoginIcon />}
             onClick={loginFromSavedSession}
-            disabled={loginLoading}
           >
-            {loginLoading ? "Logging in..." : "Login"}
+            Login
           </Button>
           <Button variant="contained" color="secondary" startIcon={<PersonAddIcon />} onClick={() => openAuth("signup")}>
             Create Account
@@ -174,11 +168,10 @@ export function LandingPage({ onAuthenticated, initialAuthMode }: LandingPagePro
                   size="large"
                   variant="outlined"
                   color="inherit"
-                  startIcon={loginLoading ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
+                  startIcon={<LoginIcon />}
                   onClick={loginFromSavedSession}
-                  disabled={loginLoading}
                 >
-                  {loginLoading ? "Logging in..." : "Login"}
+                  Login
                 </Button>
               </Stack>
             </Grid>
