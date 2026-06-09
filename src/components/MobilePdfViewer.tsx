@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import { BlobProvider } from "@react-pdf/renderer";
+import type { DocumentProps } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
@@ -22,7 +23,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 type MobilePdfViewerProps = {
-  document: ReactElement;
+  document: ReactElement<DocumentProps>;
   fileName: string;
   onExportExcel?: () => void;
 };
@@ -49,7 +50,7 @@ export function MobilePdfViewer({
   }, []);
 
   return (
-    <BlobProvider document={pdfDoc}>
+    <BlobProvider document={pdfDoc as ReactElement<DocumentProps>}>
       {({ url, loading, error }) => {
         if (loading) {
           return (
@@ -89,7 +90,7 @@ export function MobilePdfViewer({
                 borderRadius: "4px 4px 0 0",
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Stack direction="row" sx={{ alignItems: "center" }} spacing={0.5}>
                 <IconButton
                   size="small"
                   color="inherit"
