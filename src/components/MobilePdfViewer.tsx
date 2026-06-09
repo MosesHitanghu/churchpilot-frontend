@@ -15,7 +15,7 @@ import {
 import { BlobProvider } from "@react-pdf/renderer";
 import type { DocumentProps } from "@react-pdf/renderer";
 import type { ReactElement, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
@@ -36,19 +36,21 @@ export function MobilePdfViewer({
 }: MobilePdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
-  useEffect(() => {
-    const el = containerRef.current;
+  const containerCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
     if (!el) return;
-    setContainerWidth(el.clientWidth);
-    const observer = new ResizeObserver(([entry]) => {
+    setContainerWidth(Math.floor(el.getBoundingClientRect().width));
+    observerRef.current = new ResizeObserver(([entry]) => {
       setContainerWidth(Math.floor(entry.contentRect.width));
     });
-    observer.observe(el);
-    return () => observer.disconnect();
+    observerRef.current.observe(el);
   }, []);
 
   return (
@@ -159,7 +161,7 @@ export function MobilePdfViewer({
               </Collapse>
             ) : null}
             <Box
-              ref={containerRef}
+              ref={containerCallbackRef}
               sx={{
                 border: 1,
                 borderTop: 0,
