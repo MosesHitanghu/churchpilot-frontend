@@ -184,7 +184,7 @@ export function MobilePdfViewer({
                 borderColor: "divider",
                 borderRadius: "0 0 4px 4px",
                 overflow: "auto",
-                maxHeight: { xs: 480, sm: 560 },
+                maxHeight: { xs: 480, sm: 560, md: 680 },
                 bgcolor: "background.paper",
                 "& .react-pdf__Page": {
                   display: "flex",
