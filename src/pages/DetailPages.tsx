@@ -1199,6 +1199,138 @@ function createCashbookReportWorkbook({
   ]);
 }
 
+function createReceivedReportsWorkbook({
+  title,
+  collectionColumns,
+  remissionColumns,
+  rows,
+}: {
+  title: string;
+  collectionColumns: string[];
+  remissionColumns: string[];
+  rows: Array<{
+    no: number;
+    location: string;
+    scheduleDate: string;
+    schedule: string;
+    attendance: number;
+    collections: Record<string, number>;
+    remissions: Record<string, number>;
+    status: string;
+  }>;
+}) {
+  const colCount = 6 + collectionColumns.length + remissionColumns.length;
+  const lastColName = columnName(colCount);
+  const headers = [
+    "No", "Location", "Date", "Schedule", "Attendance",
+    ...collectionColumns,
+    ...remissionColumns,
+    "Status",
+  ];
+  const sheetRows = [
+    xlsxRow(1, [
+      `<c r="A1" t="inlineStr" s="3"><is><t>${escapeExcelXml(title)}</t></is></c>`,
+    ]),
+    xlsxRow(
+      4,
+      headers.map((heading, index) => xlsxTextCell(4, index + 1, heading, 3)),
+    ),
+    ...(rows.length
+      ? rows.map((row, index) => {
+          const excelRow = index + 5;
+          return xlsxRow(excelRow, [
+            xlsxNumberCell(excelRow, 1, row.no, 1),
+            xlsxTextCell(excelRow, 2, row.location, 1),
+            xlsxTextCell(excelRow, 3, row.scheduleDate || "Not set", 1),
+            xlsxTextCell(excelRow, 4, row.schedule, 1),
+            xlsxNumberCell(excelRow, 5, row.attendance, 1),
+            ...collectionColumns.map((col, ci) => {
+              const val = row.collections[col] ?? 0;
+              return val
+                ? xlsxNumberCell(excelRow, 6 + ci, val)
+                : xlsxTextCell(excelRow, 6 + ci, "", 1);
+            }),
+            ...remissionColumns.map((col, ri) => {
+              const val = row.remissions[col] ?? 0;
+              return val
+                ? xlsxNumberCell(excelRow, 6 + collectionColumns.length + ri, val)
+                : xlsxTextCell(excelRow, 6 + collectionColumns.length + ri, "", 1);
+            }),
+            xlsxTextCell(excelRow, colCount, row.status, 1),
+          ]);
+        })
+      : [xlsxRow(5, [xlsxTextCell(5, 1, "No reports found.", 1)])]),
+  ];
+
+  const worksheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews><sheetView showGridLines="1" workbookViewId="0" /></sheetViews>
+  <cols>
+    <col min="1" max="1" width="6" customWidth="1" />
+    <col min="2" max="2" width="26" customWidth="1" />
+    <col min="3" max="4" width="16" customWidth="1" />
+    <col min="5" max="${colCount}" width="14" customWidth="1" />
+  </cols>
+  <sheetData>${sheetRows.join("")}</sheetData>
+  <mergeCells count="1"><mergeCell ref="A1:${lastColName}1" /></mergeCells>
+</worksheet>`;
+
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00" /></numFmts>
+  <fonts count="2"><font><sz val="11" /><name val="Calibri" /></font><font><b /><sz val="11" /><name val="Calibri" /></font></fonts>
+  <fills count="2"><fill><patternFill patternType="none" /></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEFF4FA" /><bgColor indexed="64" /></patternFill></fill></fills>
+  <borders count="2"><border /><border><left style="thin"><color rgb="FFD7DDE5" /></left><right style="thin"><color rgb="FFD7DDE5" /></right><top style="thin"><color rgb="FFD7DDE5" /></top><bottom style="thin"><color rgb="FFD7DDE5" /></bottom></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" /></cellStyleXfs>
+  <cellXfs count="5">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" />
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" />
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" />
+    <xf numFmtId="0" fontId="1" fillId="1" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" />
+    <xf numFmtId="164" fontId="1" fillId="1" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" />
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0" /></cellStyles>
+</styleSheet>`;
+
+  return createZip([
+    {
+      name: "[Content_Types].xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
+  <Default Extension="xml" ContentType="application/xml" />
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml" />
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml" />
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml" />
+</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml" />
+</Relationships>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Reports" sheetId="1" r:id="rId1" /></sheets>
+</workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml" />
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml" />
+</Relationships>`,
+    },
+    { name: "xl/styles.xml", content: styles },
+    { name: "xl/worksheets/sheet1.xml", content: worksheet },
+  ]);
+}
+
 function toTimePickerValue(value: string) {
   return value ? dayjs(`2000-01-01T${value}`) : null;
 }
@@ -7465,6 +7597,25 @@ export function LocationDetailPage() {
     .filter(Boolean)
     .join(" - ");
   const receivedReportsPdfFileName = pdfFileName(receivedReportsPdfTitle);
+  const exportReceivedReportsExcel = () => {
+    const workbook = createReceivedReportsWorkbook({
+      title: receivedReportsPdfTitle,
+      collectionColumns: receivedReportCollectionColumns,
+      remissionColumns: receivedReportRemissionColumns,
+      rows: receivedReportPdfRows,
+    });
+    const blob = new Blob([workbook], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeExportFileName(receivedReportsPdfTitle)}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   const activeReportsView =
     selectedReportMenu === allMinistryReportsMenuOption
       ? "report"
@@ -10907,6 +11058,7 @@ export function LocationDetailPage() {
                                   />
                                 }
                                 fileName={receivedReportsPdfFileName}
+                                onExportExcel={exportReceivedReportsExcel}
                               />
                             )}
                           </Stack>

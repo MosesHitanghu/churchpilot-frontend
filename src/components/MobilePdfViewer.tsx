@@ -1,5 +1,6 @@
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import CloseIcon from "@mui/icons-material/Close";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import TableChartIcon from "@mui/icons-material/TableChart";
@@ -149,14 +150,29 @@ export function MobilePdfViewer({
               <Collapse in={filtersVisible}>
                 <Box
                   sx={{
-                    p: 1.5,
                     border: 1,
                     borderTop: 0,
                     borderColor: "divider",
                     bgcolor: "background.paper",
                   }}
                 >
-                  {filterPanel}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      px: 1,
+                      pt: 0.5,
+                    }}
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={() => setFiltersVisible(false)}
+                      aria-label="Close filters"
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Box sx={{ px: 1.5, pb: 1.5 }}>{filterPanel}</Box>
                 </Box>
               </Collapse>
             ) : null}
