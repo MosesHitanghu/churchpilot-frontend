@@ -1,10 +1,12 @@
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import FilterListIcon from "@mui/icons-material/FilterList";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import {
   Box,
   CircularProgress,
+  Collapse,
   IconButton,
   Stack,
   Tooltip,
@@ -12,31 +14,31 @@ import {
 } from "@mui/material";
 import { BlobProvider } from "@react-pdf/renderer";
 import type { DocumentProps } from "@react-pdf/renderer";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 type MobilePdfViewerProps = {
   document: ReactElement<DocumentProps>;
   fileName: string;
   onExportExcel?: () => void;
+  filterPanel?: ReactNode;
 };
 
 export function MobilePdfViewer({
   document: pdfDoc,
   fileName,
   onExportExcel,
+  filterPanel,
 }: MobilePdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [filtersVisible, setFiltersVisible] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -115,6 +117,18 @@ export function MobilePdfViewer({
                 </IconButton>
               </Stack>
               <Stack direction="row" spacing={0.25}>
+                {filterPanel !== undefined ? (
+                  <Tooltip title={filtersVisible ? "Hide Filters" : "Filters"}>
+                    <IconButton
+                      size="small"
+                      color="inherit"
+                      onClick={() => setFiltersVisible((v) => !v)}
+                      sx={{ opacity: filtersVisible ? 1 : 0.75 }}
+                    >
+                      <FilterListIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
                 {onExportExcel ? (
                   <Tooltip title="Export Excel">
                     <IconButton size="small" color="inherit" onClick={onExportExcel}>
@@ -129,6 +143,21 @@ export function MobilePdfViewer({
                 </Tooltip>
               </Stack>
             </Box>
+            {filterPanel !== undefined ? (
+              <Collapse in={filtersVisible}>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    border: 1,
+                    borderTop: 0,
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                  }}
+                >
+                  {filterPanel}
+                </Box>
+              </Collapse>
+            ) : null}
             <Box
               ref={containerRef}
               sx={{

@@ -14971,74 +14971,76 @@ export function CashbookActionsMenu({
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Autocomplete
-                  options={reportParticularOptions}
-                  value={selectedReportParticular}
-                  onChange={(_, value) => {
-                    setReportFilters((current) => ({
-                      ...current,
-                      particularId: value?.particular_id || "",
-                    }));
-                    reloadReport();
-                  }}
-                  getOptionLabel={(option) =>
-                    option.title || `Particular #${option.particular_id}`
-                  }
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Particular"
-                      size="small"
-                      fullWidth
-                    />
-                  )}
-                  fullWidth
-                />
-                <DatePicker
-                  label="Start Date"
-                  value={toPickerValue(reportFilters.startDate)}
-                  onChange={(value) => {
-                    setReportFilters((current) => ({
-                      ...current,
-                      startDate: fromPickerValue(value),
-                    }));
-                    reloadReport();
-                  }}
-                  disableFuture
-                  maxDate={toPickerValue(reportFilters.endDate) || undefined}
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <DatePicker
-                  label="End Date"
-                  value={toPickerValue(reportFilters.endDate)}
-                  onChange={(value) => {
-                    setReportFilters((current) => ({
-                      ...current,
-                      endDate: fromPickerValue(value),
-                    }));
-                    reloadReport();
-                  }}
-                  disableFuture
-                  minDate={toPickerValue(reportFilters.startDate) || undefined}
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    setReportFilters({
-                      particularId: "",
-                      startDate: "",
-                      endDate: "",
-                    });
-                    reloadReport();
-                  }}
-                  sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
-                >
-                  Clear
-                </Button>
-              </Stack>
+              {!isMobilePdfPreview ? (
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <Autocomplete
+                    options={reportParticularOptions}
+                    value={selectedReportParticular}
+                    onChange={(_, value) => {
+                      setReportFilters((current) => ({
+                        ...current,
+                        particularId: value?.particular_id || "",
+                      }));
+                      reloadReport();
+                    }}
+                    getOptionLabel={(option) =>
+                      option.title || `Particular #${option.particular_id}`
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Particular"
+                        size="small"
+                        fullWidth
+                      />
+                    )}
+                    fullWidth
+                  />
+                  <DatePicker
+                    label="Start Date"
+                    value={toPickerValue(reportFilters.startDate)}
+                    onChange={(value) => {
+                      setReportFilters((current) => ({
+                        ...current,
+                        startDate: fromPickerValue(value),
+                      }));
+                      reloadReport();
+                    }}
+                    disableFuture
+                    maxDate={toPickerValue(reportFilters.endDate) || undefined}
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                  <DatePicker
+                    label="End Date"
+                    value={toPickerValue(reportFilters.endDate)}
+                    onChange={(value) => {
+                      setReportFilters((current) => ({
+                        ...current,
+                        endDate: fromPickerValue(value),
+                      }));
+                      reloadReport();
+                    }}
+                    disableFuture
+                    minDate={toPickerValue(reportFilters.startDate) || undefined}
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      setReportFilters({
+                        particularId: "",
+                        startDate: "",
+                        endDate: "",
+                      });
+                      reloadReport();
+                    }}
+                    sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
+                  >
+                    Clear
+                  </Button>
+                </Stack>
+              ) : null}
               {!isMobilePdfPreview ? (
                 <Box
                   sx={{
@@ -15101,6 +15103,76 @@ export function CashbookActionsMenu({
                   }
                   fileName={reportPdfFileName}
                   onExportExcel={exportReportExcel}
+                  filterPanel={
+                    <Stack direction="column" spacing={2}>
+                      <Autocomplete
+                        options={reportParticularOptions}
+                        value={selectedReportParticular}
+                        onChange={(_, value) => {
+                          setReportFilters((current) => ({
+                            ...current,
+                            particularId: value?.particular_id || "",
+                          }));
+                          reloadReport();
+                        }}
+                        getOptionLabel={(option) =>
+                          option.title || `Particular #${option.particular_id}`
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Particular"
+                            size="small"
+                            fullWidth
+                          />
+                        )}
+                        fullWidth
+                      />
+                      <DatePicker
+                        label="Start Date"
+                        value={toPickerValue(reportFilters.startDate)}
+                        onChange={(value) => {
+                          setReportFilters((current) => ({
+                            ...current,
+                            startDate: fromPickerValue(value),
+                          }));
+                          reloadReport();
+                        }}
+                        disableFuture
+                        maxDate={toPickerValue(reportFilters.endDate) || undefined}
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                      />
+                      <DatePicker
+                        label="End Date"
+                        value={toPickerValue(reportFilters.endDate)}
+                        onChange={(value) => {
+                          setReportFilters((current) => ({
+                            ...current,
+                            endDate: fromPickerValue(value),
+                          }));
+                          reloadReport();
+                        }}
+                        disableFuture
+                        minDate={toPickerValue(reportFilters.startDate) || undefined}
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setReportFilters({
+                            particularId: "",
+                            startDate: "",
+                            endDate: "",
+                          });
+                          reloadReport();
+                        }}
+                        sx={{ minWidth: 96 }}
+                      >
+                        Clear
+                      </Button>
+                    </Stack>
+                  }
                 />
               )}
             </Stack>
@@ -19281,78 +19353,80 @@ export function CashbookDetailPage() {
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Autocomplete
-                  options={particulars}
-                  value={selectedCashbookReportParticular}
-                  onChange={(_, value) => {
-                    setCashbookReportFilters((current) => ({
-                      ...current,
-                      particularId: value?.particular_id || "",
-                    }));
-                    reloadCashbookReport();
-                  }}
-                  getOptionLabel={(option) =>
-                    option.title || `Particular #${option.particular_id}`
-                  }
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Particular"
-                      size="small"
-                      fullWidth
-                    />
-                  )}
-                  fullWidth
-                />
-                <DatePicker
-                  label="Start Date"
-                  value={toPickerValue(cashbookReportFilters.startDate)}
-                  onChange={(value) => {
-                    setCashbookReportFilters((current) => ({
-                      ...current,
-                      startDate: fromPickerValue(value),
-                    }));
-                    reloadCashbookReport();
-                  }}
-                  disableFuture
-                  maxDate={
-                    toPickerValue(cashbookReportFilters.endDate) || undefined
-                  }
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <DatePicker
-                  label="End Date"
-                  value={toPickerValue(cashbookReportFilters.endDate)}
-                  onChange={(value) => {
-                    setCashbookReportFilters((current) => ({
-                      ...current,
-                      endDate: fromPickerValue(value),
-                    }));
-                    reloadCashbookReport();
-                  }}
-                  disableFuture
-                  minDate={
-                    toPickerValue(cashbookReportFilters.startDate) || undefined
-                  }
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    setCashbookReportFilters({
-                      particularId: "",
-                      startDate: "",
-                      endDate: "",
-                    });
-                    reloadCashbookReport();
-                  }}
-                  sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
-                >
-                  Clear
-                </Button>
-              </Stack>
+              {!isMobilePdfPreview ? (
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <Autocomplete
+                    options={particulars}
+                    value={selectedCashbookReportParticular}
+                    onChange={(_, value) => {
+                      setCashbookReportFilters((current) => ({
+                        ...current,
+                        particularId: value?.particular_id || "",
+                      }));
+                      reloadCashbookReport();
+                    }}
+                    getOptionLabel={(option) =>
+                      option.title || `Particular #${option.particular_id}`
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Particular"
+                        size="small"
+                        fullWidth
+                      />
+                    )}
+                    fullWidth
+                  />
+                  <DatePicker
+                    label="Start Date"
+                    value={toPickerValue(cashbookReportFilters.startDate)}
+                    onChange={(value) => {
+                      setCashbookReportFilters((current) => ({
+                        ...current,
+                        startDate: fromPickerValue(value),
+                      }));
+                      reloadCashbookReport();
+                    }}
+                    disableFuture
+                    maxDate={
+                      toPickerValue(cashbookReportFilters.endDate) || undefined
+                    }
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                  <DatePicker
+                    label="End Date"
+                    value={toPickerValue(cashbookReportFilters.endDate)}
+                    onChange={(value) => {
+                      setCashbookReportFilters((current) => ({
+                        ...current,
+                        endDate: fromPickerValue(value),
+                      }));
+                      reloadCashbookReport();
+                    }}
+                    disableFuture
+                    minDate={
+                      toPickerValue(cashbookReportFilters.startDate) || undefined
+                    }
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      setCashbookReportFilters({
+                        particularId: "",
+                        startDate: "",
+                        endDate: "",
+                      });
+                      reloadCashbookReport();
+                    }}
+                    sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
+                  >
+                    Clear
+                  </Button>
+                </Stack>
+              ) : null}
               {!isMobilePdfPreview ? (
                 <Box
                   sx={{
@@ -19415,6 +19489,80 @@ export function CashbookDetailPage() {
                   }
                   fileName={cashbookReportPdfFileName}
                   onExportExcel={exportCashbookReportExcel}
+                  filterPanel={
+                    <Stack direction="column" spacing={2}>
+                      <Autocomplete
+                        options={particulars}
+                        value={selectedCashbookReportParticular}
+                        onChange={(_, value) => {
+                          setCashbookReportFilters((current) => ({
+                            ...current,
+                            particularId: value?.particular_id || "",
+                          }));
+                          reloadCashbookReport();
+                        }}
+                        getOptionLabel={(option) =>
+                          option.title || `Particular #${option.particular_id}`
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Particular"
+                            size="small"
+                            fullWidth
+                          />
+                        )}
+                        fullWidth
+                      />
+                      <DatePicker
+                        label="Start Date"
+                        value={toPickerValue(cashbookReportFilters.startDate)}
+                        onChange={(value) => {
+                          setCashbookReportFilters((current) => ({
+                            ...current,
+                            startDate: fromPickerValue(value),
+                          }));
+                          reloadCashbookReport();
+                        }}
+                        disableFuture
+                        maxDate={
+                          toPickerValue(cashbookReportFilters.endDate) || undefined
+                        }
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                      />
+                      <DatePicker
+                        label="End Date"
+                        value={toPickerValue(cashbookReportFilters.endDate)}
+                        onChange={(value) => {
+                          setCashbookReportFilters((current) => ({
+                            ...current,
+                            endDate: fromPickerValue(value),
+                          }));
+                          reloadCashbookReport();
+                        }}
+                        disableFuture
+                        minDate={
+                          toPickerValue(cashbookReportFilters.startDate) || undefined
+                        }
+                        slotProps={{ textField: { size: "small", fullWidth: true } }}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setCashbookReportFilters({
+                            particularId: "",
+                            startDate: "",
+                            endDate: "",
+                          });
+                          reloadCashbookReport();
+                        }}
+                        sx={{ minWidth: 96 }}
+                      >
+                        Clear
+                      </Button>
+                    </Stack>
+                  }
                 />
               )}
             </Stack>
