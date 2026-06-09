@@ -3,6 +3,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CloseIcon from "@mui/icons-material/Close";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import PrintIcon from "@mui/icons-material/Print";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import {
   Box,
@@ -81,6 +82,20 @@ export function MobilePdfViewer({
           a.click();
         };
 
+        const handlePrint = () => {
+          const iframe = window.document.createElement("iframe");
+          iframe.style.cssText = "position:fixed;width:0;height:0;border:0;";
+          iframe.src = url;
+          window.document.body.appendChild(iframe);
+          iframe.onload = () => {
+            iframe.focus();
+            iframe.contentWindow?.print();
+            window.setTimeout(() => {
+              window.document.body.removeChild(iframe);
+            }, 1000);
+          };
+        };
+
         return (
           <Stack spacing={0}>
             <Box
@@ -139,6 +154,11 @@ export function MobilePdfViewer({
                     </IconButton>
                   </Tooltip>
                 ) : null}
+                <Tooltip title="Print">
+                  <IconButton size="small" color="inherit" onClick={handlePrint}>
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title="Download PDF">
                   <IconButton size="small" color="inherit" onClick={handleDownloadPdf}>
                     <FileDownloadIcon fontSize="small" />

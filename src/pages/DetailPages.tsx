@@ -15066,124 +15066,52 @@ export function CashbookActionsMenu({
           Schedule Collections
         </MenuItem>
       </Menu>
-      <Dialog
-        open={reportOpen}
-        onClose={() => setReportOpen(false)}
-        fullWidth
-        maxWidth="lg"
-        slotProps={{
-          paper: {
+      {isMobilePdfPreview ? (
+        <Drawer
+          anchor="bottom"
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          PaperProps={{
             sx: {
-              height: { xs: "100dvh", sm: "auto" },
-              m: { xs: 0, sm: 2 },
-              maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+              maxHeight: "90dvh",
+              borderRadius: "12px 12px 0 0",
+              display: "flex",
+              flexDirection: "column",
             },
-          },
-        }}
-      >
-        <DialogTitle>{cashbookReportLabels[reportType]} Report</DialogTitle>
-        <DialogContent>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              {!isMobilePdfPreview ? (
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <Autocomplete
-                    options={reportParticularOptions}
-                    value={selectedReportParticular}
-                    onChange={(_, value) => {
-                      setReportFilters((current) => ({
-                        ...current,
-                        particularId: value?.particular_id || "",
-                      }));
-                      reloadReport();
+          }}
+        >
+          <DialogTitle>{cashbookReportLabels[reportType]} Report</DialogTitle>
+          <DialogContent sx={{ overflow: "auto", flex: 1 }}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                {reportLoading ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      placeItems: "center",
+                      minHeight: 280,
                     }}
-                    getOptionLabel={(option) =>
-                      option.title || `Particular #${option.particular_id}`
-                    }
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Particular"
-                        size="small"
-                        fullWidth
-                      />
-                    )}
-                    fullWidth
-                  />
-                  <DatePicker
-                    label="Start Date"
-                    value={toPickerValue(reportFilters.startDate)}
-                    onChange={(value) => {
-                      setReportFilters((current) => ({
-                        ...current,
-                        startDate: fromPickerValue(value),
-                      }));
-                      reloadReport();
-                    }}
-                    disableFuture
-                    maxDate={toPickerValue(reportFilters.endDate) || undefined}
-                    slotProps={{ textField: { size: "small", fullWidth: true } }}
-                  />
-                  <DatePicker
-                    label="End Date"
-                    value={toPickerValue(reportFilters.endDate)}
-                    onChange={(value) => {
-                      setReportFilters((current) => ({
-                        ...current,
-                        endDate: fromPickerValue(value),
-                      }));
-                      reloadReport();
-                    }}
-                    disableFuture
-                    minDate={toPickerValue(reportFilters.startDate) || undefined}
-                    slotProps={{ textField: { size: "small", fullWidth: true } }}
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setReportFilters({
-                        particularId: "",
-                        startDate: "",
-                        endDate: "",
-                      });
-                      reloadReport();
-                    }}
-                    sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
                   >
-                    Clear
-                  </Button>
-                </Stack>
-              ) : null}
-              {reportLoading ? (
-                <Box
-                  sx={{
-                    display: "grid",
-                    placeItems: "center",
-                    minHeight: 280,
-                  }}
-                >
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <MobilePdfViewer
-                  document={
-                    <CashbookTransactionsReportDocument
-                      cashbook={activeReportCashbook}
-                      reportType={reportType}
-                      startDate={reportFilters.startDate}
-                      endDate={reportFilters.endDate}
-                      particularLabel={
-                        selectedReportParticular?.title || undefined
-                      }
-                      rows={reportRows}
-                      title={reportPdfTitle}
-                    />
-                  }
-                  fileName={reportPdfFileName}
-                  onExportExcel={exportReportExcel}
-                  filterPanel={
-                    isMobilePdfPreview ? (
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <MobilePdfViewer
+                    document={
+                      <CashbookTransactionsReportDocument
+                        cashbook={activeReportCashbook}
+                        reportType={reportType}
+                        startDate={reportFilters.startDate}
+                        endDate={reportFilters.endDate}
+                        particularLabel={
+                          selectedReportParticular?.title || undefined
+                        }
+                        rows={reportRows}
+                        title={reportPdfTitle}
+                      />
+                    }
+                    fileName={reportPdfFileName}
+                    onExportExcel={exportReportExcel}
+                    filterPanel={
                       <Stack direction="column" spacing={2}>
                         <Autocomplete
                           options={reportParticularOptions}
@@ -15261,24 +15189,238 @@ export function CashbookActionsMenu({
                           Clear
                         </Button>
                       </Stack>
-                    ) : undefined
-                  }
-                />
-              )}
-            </Stack>
-          </LocalizationProvider>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            size="small"
-            variant="contained"
-            color="secondary"
-            onClick={() => setReportOpen(false)}
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+                    }
+                  />
+                )}
+              </Stack>
+            </LocalizationProvider>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={() => setReportOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Drawer>
+      ) : (
+        <Dialog
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          fullWidth
+          maxWidth="lg"
+          slotProps={{
+            paper: {
+              sx: {
+                height: { xs: "100dvh", sm: "auto" },
+                m: { xs: 0, sm: 2 },
+                maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+              },
+            },
+          }}
+        >
+          <DialogTitle>{cashbookReportLabels[reportType]} Report</DialogTitle>
+          <DialogContent>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                {!isMobilePdfPreview ? (
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <Autocomplete
+                      options={reportParticularOptions}
+                      value={selectedReportParticular}
+                      onChange={(_, value) => {
+                        setReportFilters((current) => ({
+                          ...current,
+                          particularId: value?.particular_id || "",
+                        }));
+                        reloadReport();
+                      }}
+                      getOptionLabel={(option) =>
+                        option.title || `Particular #${option.particular_id}`
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Particular"
+                          size="small"
+                          fullWidth
+                        />
+                      )}
+                      fullWidth
+                    />
+                    <DatePicker
+                      label="Start Date"
+                      value={toPickerValue(reportFilters.startDate)}
+                      onChange={(value) => {
+                        setReportFilters((current) => ({
+                          ...current,
+                          startDate: fromPickerValue(value),
+                        }));
+                        reloadReport();
+                      }}
+                      disableFuture
+                      maxDate={toPickerValue(reportFilters.endDate) || undefined}
+                      slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                    <DatePicker
+                      label="End Date"
+                      value={toPickerValue(reportFilters.endDate)}
+                      onChange={(value) => {
+                        setReportFilters((current) => ({
+                          ...current,
+                          endDate: fromPickerValue(value),
+                        }));
+                        reloadReport();
+                      }}
+                      disableFuture
+                      minDate={toPickerValue(reportFilters.startDate) || undefined}
+                      slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setReportFilters({
+                          particularId: "",
+                          startDate: "",
+                          endDate: "",
+                        });
+                        reloadReport();
+                      }}
+                      sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
+                    >
+                      Clear
+                    </Button>
+                  </Stack>
+                ) : null}
+                {reportLoading ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      placeItems: "center",
+                      minHeight: 280,
+                    }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <MobilePdfViewer
+                    document={
+                      <CashbookTransactionsReportDocument
+                        cashbook={activeReportCashbook}
+                        reportType={reportType}
+                        startDate={reportFilters.startDate}
+                        endDate={reportFilters.endDate}
+                        particularLabel={
+                          selectedReportParticular?.title || undefined
+                        }
+                        rows={reportRows}
+                        title={reportPdfTitle}
+                      />
+                    }
+                    fileName={reportPdfFileName}
+                    onExportExcel={exportReportExcel}
+                    filterPanel={
+                      isMobilePdfPreview ? (
+                        <Stack direction="column" spacing={2}>
+                          <Autocomplete
+                            options={reportParticularOptions}
+                            value={selectedReportParticular}
+                            onChange={(_, value) => {
+                              setReportFilters((current) => ({
+                                ...current,
+                                particularId: value?.particular_id || "",
+                              }));
+                              reloadReport();
+                            }}
+                            getOptionLabel={(option) =>
+                              option.title ||
+                              `Particular #${option.particular_id}`
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Particular"
+                                size="small"
+                                fullWidth
+                              />
+                            )}
+                            fullWidth
+                          />
+                          <DatePicker
+                            label="Start Date"
+                            value={toPickerValue(reportFilters.startDate)}
+                            onChange={(value) => {
+                              setReportFilters((current) => ({
+                                ...current,
+                                startDate: fromPickerValue(value),
+                              }));
+                              reloadReport();
+                            }}
+                            disableFuture
+                            maxDate={
+                              toPickerValue(reportFilters.endDate) || undefined
+                            }
+                            slotProps={{
+                              textField: { size: "small", fullWidth: true },
+                            }}
+                          />
+                          <DatePicker
+                            label="End Date"
+                            value={toPickerValue(reportFilters.endDate)}
+                            onChange={(value) => {
+                              setReportFilters((current) => ({
+                                ...current,
+                                endDate: fromPickerValue(value),
+                              }));
+                              reloadReport();
+                            }}
+                            disableFuture
+                            minDate={
+                              toPickerValue(reportFilters.startDate) || undefined
+                            }
+                            slotProps={{
+                              textField: { size: "small", fullWidth: true },
+                            }}
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                              setReportFilters({
+                                particularId: "",
+                                startDate: "",
+                                endDate: "",
+                              });
+                              reloadReport();
+                            }}
+                            sx={{ minWidth: 96 }}
+                          >
+                            Clear
+                          </Button>
+                        </Stack>
+                      ) : undefined
+                    }
+                  />
+                )}
+              </Stack>
+            </LocalizationProvider>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={() => setReportOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
       <Dialog
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
@@ -19412,130 +19554,54 @@ export function CashbookDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
-        open={cashbookReportOpen}
-        onClose={() => setCashbookReportOpen(false)}
-        fullWidth
-        maxWidth="lg"
-        slotProps={{
-          paper: {
+      {isMobilePdfPreview ? (
+        <Drawer
+          anchor="bottom"
+          open={cashbookReportOpen}
+          onClose={() => setCashbookReportOpen(false)}
+          PaperProps={{
             sx: {
-              height: { xs: "100dvh", sm: "auto" },
-              m: { xs: 0, sm: 2 },
-              maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+              maxHeight: "90dvh",
+              borderRadius: "12px 12px 0 0",
+              display: "flex",
+              flexDirection: "column",
             },
-          },
-        }}
-      >
-        <DialogTitle>
-          {cashbookReportLabels[cashbookReportType]} Report
-        </DialogTitle>
-        <DialogContent>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              {!isMobilePdfPreview ? (
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <Autocomplete
-                    options={particulars}
-                    value={selectedCashbookReportParticular}
-                    onChange={(_, value) => {
-                      setCashbookReportFilters((current) => ({
-                        ...current,
-                        particularId: value?.particular_id || "",
-                      }));
-                      reloadCashbookReport();
+          }}
+        >
+          <DialogTitle>
+            {cashbookReportLabels[cashbookReportType]} Report
+          </DialogTitle>
+          <DialogContent sx={{ overflow: "auto", flex: 1 }}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                {cashbookReportLoading ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      placeItems: "center",
+                      minHeight: 280,
                     }}
-                    getOptionLabel={(option) =>
-                      option.title || `Particular #${option.particular_id}`
-                    }
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Particular"
-                        size="small"
-                        fullWidth
-                      />
-                    )}
-                    fullWidth
-                  />
-                  <DatePicker
-                    label="Start Date"
-                    value={toPickerValue(cashbookReportFilters.startDate)}
-                    onChange={(value) => {
-                      setCashbookReportFilters((current) => ({
-                        ...current,
-                        startDate: fromPickerValue(value),
-                      }));
-                      reloadCashbookReport();
-                    }}
-                    disableFuture
-                    maxDate={
-                      toPickerValue(cashbookReportFilters.endDate) || undefined
-                    }
-                    slotProps={{ textField: { size: "small", fullWidth: true } }}
-                  />
-                  <DatePicker
-                    label="End Date"
-                    value={toPickerValue(cashbookReportFilters.endDate)}
-                    onChange={(value) => {
-                      setCashbookReportFilters((current) => ({
-                        ...current,
-                        endDate: fromPickerValue(value),
-                      }));
-                      reloadCashbookReport();
-                    }}
-                    disableFuture
-                    minDate={
-                      toPickerValue(cashbookReportFilters.startDate) || undefined
-                    }
-                    slotProps={{ textField: { size: "small", fullWidth: true } }}
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setCashbookReportFilters({
-                        particularId: "",
-                        startDate: "",
-                        endDate: "",
-                      });
-                      reloadCashbookReport();
-                    }}
-                    sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
                   >
-                    Clear
-                  </Button>
-                </Stack>
-              ) : null}
-              {cashbookReportLoading ? (
-                <Box
-                  sx={{
-                    display: "grid",
-                    placeItems: "center",
-                    minHeight: 280,
-                  }}
-                >
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <MobilePdfViewer
-                  document={
-                    <CashbookTransactionsReportDocument
-                      cashbook={cashbook}
-                      reportType={cashbookReportType}
-                      startDate={cashbookReportFilters.startDate}
-                      endDate={cashbookReportFilters.endDate}
-                      particularLabel={
-                        selectedCashbookReportParticular?.title || undefined
-                      }
-                      rows={cashbookReportRows}
-                      title={cashbookReportPdfTitle}
-                    />
-                  }
-                  fileName={cashbookReportPdfFileName}
-                  onExportExcel={exportCashbookReportExcel}
-                  filterPanel={
-                    isMobilePdfPreview ? (
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <MobilePdfViewer
+                    document={
+                      <CashbookTransactionsReportDocument
+                        cashbook={cashbook}
+                        reportType={cashbookReportType}
+                        startDate={cashbookReportFilters.startDate}
+                        endDate={cashbookReportFilters.endDate}
+                        particularLabel={
+                          selectedCashbookReportParticular?.title || undefined
+                        }
+                        rows={cashbookReportRows}
+                        title={cashbookReportPdfTitle}
+                      />
+                    }
+                    fileName={cashbookReportPdfFileName}
+                    onExportExcel={exportCashbookReportExcel}
+                    filterPanel={
                       <Stack direction="column" spacing={2}>
                         <Autocomplete
                           options={particulars}
@@ -19615,24 +19681,248 @@ export function CashbookDetailPage() {
                           Clear
                         </Button>
                       </Stack>
-                    ) : undefined
-                  }
-                />
-              )}
-            </Stack>
-          </LocalizationProvider>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            size="small"
-            variant="contained"
-            color="secondary"
-            onClick={() => setCashbookReportOpen(false)}
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+                    }
+                  />
+                )}
+              </Stack>
+            </LocalizationProvider>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={() => setCashbookReportOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Drawer>
+      ) : (
+        <Dialog
+          open={cashbookReportOpen}
+          onClose={() => setCashbookReportOpen(false)}
+          fullWidth
+          maxWidth="lg"
+          slotProps={{
+            paper: {
+              sx: {
+                height: { xs: "100dvh", sm: "auto" },
+                m: { xs: 0, sm: 2 },
+                maxHeight: { xs: "100dvh", sm: "calc(100% - 64px)" },
+              },
+            },
+          }}
+        >
+          <DialogTitle>
+            {cashbookReportLabels[cashbookReportType]} Report
+          </DialogTitle>
+          <DialogContent>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                {!isMobilePdfPreview ? (
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <Autocomplete
+                      options={particulars}
+                      value={selectedCashbookReportParticular}
+                      onChange={(_, value) => {
+                        setCashbookReportFilters((current) => ({
+                          ...current,
+                          particularId: value?.particular_id || "",
+                        }));
+                        reloadCashbookReport();
+                      }}
+                      getOptionLabel={(option) =>
+                        option.title || `Particular #${option.particular_id}`
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Particular"
+                          size="small"
+                          fullWidth
+                        />
+                      )}
+                      fullWidth
+                    />
+                    <DatePicker
+                      label="Start Date"
+                      value={toPickerValue(cashbookReportFilters.startDate)}
+                      onChange={(value) => {
+                        setCashbookReportFilters((current) => ({
+                          ...current,
+                          startDate: fromPickerValue(value),
+                        }));
+                        reloadCashbookReport();
+                      }}
+                      disableFuture
+                      maxDate={
+                        toPickerValue(cashbookReportFilters.endDate) || undefined
+                      }
+                      slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                    <DatePicker
+                      label="End Date"
+                      value={toPickerValue(cashbookReportFilters.endDate)}
+                      onChange={(value) => {
+                        setCashbookReportFilters((current) => ({
+                          ...current,
+                          endDate: fromPickerValue(value),
+                        }));
+                        reloadCashbookReport();
+                      }}
+                      disableFuture
+                      minDate={
+                        toPickerValue(cashbookReportFilters.startDate) || undefined
+                      }
+                      slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setCashbookReportFilters({
+                          particularId: "",
+                          startDate: "",
+                          endDate: "",
+                        });
+                        reloadCashbookReport();
+                      }}
+                      sx={{ minWidth: 96, alignSelf: { sm: "center" } }}
+                    >
+                      Clear
+                    </Button>
+                  </Stack>
+                ) : null}
+                {cashbookReportLoading ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      placeItems: "center",
+                      minHeight: 280,
+                    }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <MobilePdfViewer
+                    document={
+                      <CashbookTransactionsReportDocument
+                        cashbook={cashbook}
+                        reportType={cashbookReportType}
+                        startDate={cashbookReportFilters.startDate}
+                        endDate={cashbookReportFilters.endDate}
+                        particularLabel={
+                          selectedCashbookReportParticular?.title || undefined
+                        }
+                        rows={cashbookReportRows}
+                        title={cashbookReportPdfTitle}
+                      />
+                    }
+                    fileName={cashbookReportPdfFileName}
+                    onExportExcel={exportCashbookReportExcel}
+                    filterPanel={
+                      isMobilePdfPreview ? (
+                        <Stack direction="column" spacing={2}>
+                          <Autocomplete
+                            options={particulars}
+                            value={selectedCashbookReportParticular}
+                            onChange={(_, value) => {
+                              setCashbookReportFilters((current) => ({
+                                ...current,
+                                particularId: value?.particular_id || "",
+                              }));
+                              reloadCashbookReport();
+                            }}
+                            getOptionLabel={(option) =>
+                              option.title ||
+                              `Particular #${option.particular_id}`
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Particular"
+                                size="small"
+                                fullWidth
+                              />
+                            )}
+                            fullWidth
+                          />
+                          <DatePicker
+                            label="Start Date"
+                            value={toPickerValue(
+                              cashbookReportFilters.startDate,
+                            )}
+                            onChange={(value) => {
+                              setCashbookReportFilters((current) => ({
+                                ...current,
+                                startDate: fromPickerValue(value),
+                              }));
+                              reloadCashbookReport();
+                            }}
+                            disableFuture
+                            maxDate={
+                              toPickerValue(cashbookReportFilters.endDate) ||
+                              undefined
+                            }
+                            slotProps={{
+                              textField: { size: "small", fullWidth: true },
+                            }}
+                          />
+                          <DatePicker
+                            label="End Date"
+                            value={toPickerValue(cashbookReportFilters.endDate)}
+                            onChange={(value) => {
+                              setCashbookReportFilters((current) => ({
+                                ...current,
+                                endDate: fromPickerValue(value),
+                              }));
+                              reloadCashbookReport();
+                            }}
+                            disableFuture
+                            minDate={
+                              toPickerValue(cashbookReportFilters.startDate) ||
+                              undefined
+                            }
+                            slotProps={{
+                              textField: { size: "small", fullWidth: true },
+                            }}
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                              setCashbookReportFilters({
+                                particularId: "",
+                                startDate: "",
+                                endDate: "",
+                              });
+                              reloadCashbookReport();
+                            }}
+                            sx={{ minWidth: 96 }}
+                          >
+                            Clear
+                          </Button>
+                        </Stack>
+                      ) : undefined
+                    }
+                  />
+                )}
+              </Stack>
+            </LocalizationProvider>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              size="small"
+              variant="contained"
+              color="secondary"
+              onClick={() => setCashbookReportOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
       <Dialog
         open={cashbookDeleteConfirmOpen}
         onClose={() => setCashbookDeleteConfirmOpen(false)}
