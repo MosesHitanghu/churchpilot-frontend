@@ -33,20 +33,28 @@ function App({ themeMode, onToggleTheme }: AppProps) {
       return undefined;
     }
 
+    const TIMEOUT = 60 * 60 * 1000;
+    const THROTTLE = 5_000;
+
     let timeoutId = window.setTimeout(() => {
       clearSessionAccount();
       setAccount(null);
-    }, 60 * 60 * 1000);
+    }, TIMEOUT);
+
+    let lastReset = Date.now();
 
     const resetTimer = () => {
+      const now = Date.now();
+      if (now - lastReset < THROTTLE) return;
+      lastReset = now;
       window.clearTimeout(timeoutId);
       timeoutId = window.setTimeout(() => {
         clearSessionAccount();
         setAccount(null);
-      }, 60 * 60 * 1000);
+      }, TIMEOUT);
     };
 
-    const events = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+    const events = ["click", "keydown", "scroll", "touchstart"];
     events.forEach((eventName) =>
       window.addEventListener(eventName, resetTimer, { passive: true }),
     );
@@ -64,13 +72,7 @@ function App({ themeMode, onToggleTheme }: AppProps) {
       <Routes>
       <Route
         path="/"
-        element={
-          account ? (
-            <Navigate to="/app" replace />
-          ) : (
-            <LandingPage onAuthenticated={setAccount} />
-          )
-        }
+        element={<LandingPage onAuthenticated={setAccount} />}
       />
       <Route path="/admin" element={<AdminDashboardPage />} />
       <Route path="/login" element={<LandingPage onAuthenticated={setAccount} initialAuthMode="login" />} />

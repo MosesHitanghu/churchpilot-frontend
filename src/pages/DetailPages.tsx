@@ -107,12 +107,12 @@ import type { SchedulerEvent } from "@mui/x-scheduler/models";
 import {
   Document,
   Page,
-  PDFDownloadLink,
   PDFViewer,
   StyleSheet,
   Text,
   View,
 } from "@react-pdf/renderer";
+import { MobilePdfViewer } from "../components/MobilePdfViewer";
 import dayjs, { type Dayjs } from "dayjs";
 import {
   Children,
@@ -2129,7 +2129,7 @@ export function LocationDetailPage() {
   const routerLocation = useLocation();
   const account = getSessionAccount();
   const theme = useTheme();
-  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("md"));
   const [activeTab, setActiveTab] = useState(10);
   const [cashbooks, setCashbooks] = useState<Cashbook[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -6450,6 +6450,13 @@ export function LocationDetailPage() {
   );
 
   if (!locationId) {
+    if (locationsListFetching) {
+      return (
+        <Box sx={{ display: "grid", minHeight: 400, placeItems: "center" }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
     return (
       <>
         <Grid container spacing={2.5}>
@@ -8275,6 +8282,7 @@ export function LocationDetailPage() {
                     aria-controls="location-tabpanel-10"
                     icon={<RateReviewIcon />}
                     iconPosition="start"
+                    onClick={(event) => setReportMenuAnchor(event.currentTarget)}
                     label={
                       <Box
                         component="span"
@@ -8301,6 +8309,7 @@ export function LocationDetailPage() {
                     aria-controls="location-tabpanel-2"
                     icon={<PaidIcon />}
                     iconPosition="start"
+                    onClick={(event) => setFinanceMenuAnchor(event.currentTarget)}
                     label={
                       <Box
                         component="span"
@@ -8327,6 +8336,7 @@ export function LocationDetailPage() {
                     aria-controls="location-tabpanel-3"
                     icon={<FormatListNumberedIcon />}
                     iconPosition="start"
+                    onClick={(event) => setAttendanceTabMenuAnchor(event.currentTarget)}
                     label={
                       <Box
                         component="span"
@@ -8353,6 +8363,7 @@ export function LocationDetailPage() {
                     aria-controls="location-tabpanel-1"
                     icon={<GroupsIcon />}
                     iconPosition="start"
+                    onClick={(event) => setMembershipMenuAnchor(event.currentTarget)}
                     label={
                       <Box
                         component="span"
@@ -10847,40 +10858,11 @@ export function LocationDetailPage() {
                           />
                         ) : (
                           <Stack spacing={1.5}>
-                            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                              <PDFDownloadLink
-                                document={
-                                  <ReceivedReportsDocument
-                                    title={receivedReportsPdfTitle}
-                                    locationTitle={location.title}
-                                    collectionColumns={
-                                      receivedReportCollectionColumns
-                                    }
-                                    remissionColumns={
-                                      receivedReportRemissionColumns
-                                    }
-                                    rows={receivedReportPdfRows}
-                                  />
-                                }
-                                fileName={receivedReportsPdfFileName}
-                                style={{ textDecoration: "none" }}
-                              >
-                                {({ loading }) => (
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    disabled={loading}
-                                  >
-                                    {loading ? "Preparing PDF..." : "Download PDF"}
-                                  </Button>
-                                )}
-                              </PDFDownloadLink>
-                            </Box>
                             {!isMobilePdfPreview ? (
                               <Box
                                 sx={{
-                                  height: { sm: 560, md: 680 },
-                                  minHeight: { sm: 520 },
+                                  height: { md: 560, lg: 680 },
+                                  minHeight: { md: 520 },
                                   border: 1,
                                   borderColor: "divider",
                                   borderRadius: 1,
@@ -10909,7 +10891,24 @@ export function LocationDetailPage() {
                                   />
                                 </PDFViewer>
                               </Box>
-                            ) : null}
+                            ) : (
+                              <MobilePdfViewer
+                                document={
+                                  <ReceivedReportsDocument
+                                    title={receivedReportsPdfTitle}
+                                    locationTitle={location.title}
+                                    collectionColumns={
+                                      receivedReportCollectionColumns
+                                    }
+                                    remissionColumns={
+                                      receivedReportRemissionColumns
+                                    }
+                                    rows={receivedReportPdfRows}
+                                  />
+                                }
+                                fileName={receivedReportsPdfFileName}
+                              />
+                            )}
                           </Stack>
                         )
                       ) : null}
@@ -14615,7 +14614,7 @@ export function CashbookActionsMenu({
     opening_balance: String(cashbook.opening_balance || 0),
   });
   const theme = useTheme();
-  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const closeMenu = () => {
     setAnchorEl(null);
@@ -15040,40 +15039,11 @@ export function CashbookActionsMenu({
                   Clear
                 </Button>
               </Stack>
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <PDFDownloadLink
-                  document={
-                    <CashbookTransactionsReportDocument
-                      cashbook={activeReportCashbook}
-                      reportType={reportType}
-                      startDate={reportFilters.startDate}
-                      endDate={reportFilters.endDate}
-                      particularLabel={
-                        selectedReportParticular?.title || undefined
-                      }
-                      rows={reportRows}
-                      title={reportPdfTitle}
-                    />
-                  }
-                  fileName={reportPdfFileName}
-                  style={{ textDecoration: "none" }}
-                >
-                  {({ loading }) => (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={loading || reportLoading}
-                    >
-                      {loading ? "Preparing PDF..." : "Download PDF"}
-                    </Button>
-                  )}
-                </PDFDownloadLink>
-              </Box>
               {!isMobilePdfPreview ? (
                 <Box
                   sx={{
-                    height: { sm: 560, md: 680 },
-                    minHeight: { sm: 520 },
+                    height: { md: 560, lg: 680 },
+                    minHeight: { md: 520 },
                     border: 1,
                     borderColor: "divider",
                     borderRadius: 1,
@@ -15114,19 +15084,39 @@ export function CashbookActionsMenu({
                     </PDFViewer>
                   )}
                 </Box>
-              ) : null}
+              ) : (
+                <MobilePdfViewer
+                  document={
+                    <CashbookTransactionsReportDocument
+                      cashbook={activeReportCashbook}
+                      reportType={reportType}
+                      startDate={reportFilters.startDate}
+                      endDate={reportFilters.endDate}
+                      particularLabel={
+                        selectedReportParticular?.title || undefined
+                      }
+                      rows={reportRows}
+                      title={reportPdfTitle}
+                    />
+                  }
+                  fileName={reportPdfFileName}
+                  onExportExcel={exportReportExcel}
+                />
+              )}
             </Stack>
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={exportReportExcel}
-          >
-            Export Excel
-          </Button>
+          {!isMobilePdfPreview ? (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={exportReportExcel}
+            >
+              Export Excel
+            </Button>
+          ) : null}
           <Button
             size="small"
             variant="contained"
@@ -16811,7 +16801,7 @@ export function CashbookDetailPage() {
   const routerLocation = useLocation();
   const account = getSessionAccount();
   const theme = useTheme();
-  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobilePdfPreview = useMediaQuery(theme.breakpoints.down("md"));
   const {
     data: cashbook,
     setData: setCashbook,
@@ -19363,40 +19353,11 @@ export function CashbookDetailPage() {
                   Clear
                 </Button>
               </Stack>
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <PDFDownloadLink
-                  document={
-                    <CashbookTransactionsReportDocument
-                      cashbook={cashbook}
-                      reportType={cashbookReportType}
-                      startDate={cashbookReportFilters.startDate}
-                      endDate={cashbookReportFilters.endDate}
-                      particularLabel={
-                        selectedCashbookReportParticular?.title || undefined
-                      }
-                      rows={cashbookReportRows}
-                      title={cashbookReportPdfTitle}
-                    />
-                  }
-                  fileName={cashbookReportPdfFileName}
-                  style={{ textDecoration: "none" }}
-                >
-                  {({ loading }) => (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={loading || cashbookReportLoading}
-                    >
-                      {loading ? "Preparing PDF..." : "Download PDF"}
-                    </Button>
-                  )}
-                </PDFDownloadLink>
-              </Box>
               {!isMobilePdfPreview ? (
                 <Box
                   sx={{
-                    height: { sm: 560, md: 680 },
-                    minHeight: { sm: 520 },
+                    height: { md: 560, lg: 680 },
+                    minHeight: { md: 520 },
                     border: 1,
                     borderColor: "divider",
                     borderRadius: 1,
@@ -19437,19 +19398,39 @@ export function CashbookDetailPage() {
                     </PDFViewer>
                   )}
                 </Box>
-              ) : null}
+              ) : (
+                <MobilePdfViewer
+                  document={
+                    <CashbookTransactionsReportDocument
+                      cashbook={cashbook}
+                      reportType={cashbookReportType}
+                      startDate={cashbookReportFilters.startDate}
+                      endDate={cashbookReportFilters.endDate}
+                      particularLabel={
+                        selectedCashbookReportParticular?.title || undefined
+                      }
+                      rows={cashbookReportRows}
+                      title={cashbookReportPdfTitle}
+                    />
+                  }
+                  fileName={cashbookReportPdfFileName}
+                  onExportExcel={exportCashbookReportExcel}
+                />
+              )}
             </Stack>
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={exportCashbookReportExcel}
-          >
-            Export Excel
-          </Button>
+          {!isMobilePdfPreview ? (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={exportCashbookReportExcel}
+            >
+              Export Excel
+            </Button>
+          ) : null}
           <Button
             size="small"
             variant="contained"
