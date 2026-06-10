@@ -17,7 +17,6 @@ import Diversity2Icon from "@mui/icons-material/Diversity2";
 import EditIcon from "@mui/icons-material/Edit";
 import EmailIcon from "@mui/icons-material/Email";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import ForwardToInboxIcon from "@mui/icons-material/ForwardToInbox";
 import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -15071,12 +15070,14 @@ export function CashbookActionsMenu({
           anchor="bottom"
           open={reportOpen}
           onClose={() => setReportOpen(false)}
-          PaperProps={{
-            sx: {
-              maxHeight: "90dvh",
-              borderRadius: "12px 12px 0 0",
-              display: "flex",
-              flexDirection: "column",
+          slotProps={{
+            paper: {
+              sx: {
+                maxHeight: "90dvh",
+                borderRadius: "12px 12px 0 0",
+                display: "flex",
+                flexDirection: "column",
+              },
             },
           }}
         >
@@ -19559,12 +19560,14 @@ export function CashbookDetailPage() {
           anchor="bottom"
           open={cashbookReportOpen}
           onClose={() => setCashbookReportOpen(false)}
-          PaperProps={{
-            sx: {
-              maxHeight: "90dvh",
-              borderRadius: "12px 12px 0 0",
-              display: "flex",
-              flexDirection: "column",
+          slotProps={{
+            paper: {
+              sx: {
+                maxHeight: "90dvh",
+                borderRadius: "12px 12px 0 0",
+                display: "flex",
+                flexDirection: "column",
+              },
             },
           }}
         >
