@@ -1470,12 +1470,19 @@ function LocationTabSkeleton() {
   );
 }
 
-function memberName(accounts: Account[], userId?: string | null) {
+function memberName(
+  accounts: Account[],
+  userId?: string | null,
+  displayName?: string | null,
+) {
+  if (displayName) {
+    return displayName;
+  }
   const account = accounts.find((item) => item.id === userId);
   return account
     ? accountOptionLabel(account)
     : userId
-      ? `Account #${userId}`
+      ? "Unknown account"
       : "Not assigned";
 }
 
@@ -1483,12 +1490,23 @@ function accountDetail(
   accounts: Account[],
   userId: string | null | undefined,
   field: keyof Account,
+  fallback?: string | null,
 ) {
+  if (fallback) {
+    return fallback;
+  }
   const account = accounts.find((item) => item.id === userId);
   return account?.[field] || "Not set";
 }
 
-function memberPhone(accounts: Account[], userId?: string | null) {
+function memberPhone(
+  accounts: Account[],
+  userId?: string | null,
+  phoneNumber?: string | null,
+) {
+  if (phoneNumber) {
+    return phoneNumber;
+  }
   const account = accounts.find((item) => item.id === userId);
   return account?.phone_number || "Phone not set";
 }
@@ -5913,8 +5931,8 @@ export function LocationDetailPage() {
     }
     return [
       zone.title,
-      memberName(accounts, zone.leader1_id),
-      memberName(accounts, zone.leader2_id),
+      memberName(accounts, zone.leader1_id, zone.leader1_display_name),
+      memberName(accounts, zone.leader2_id, zone.leader2_display_name),
     ].some((value) =>
       String(value || "")
         .toLowerCase()
@@ -5928,8 +5946,8 @@ export function LocationDetailPage() {
     }
     return [
       family.title,
-      memberName(accounts, family.leader1_id),
-      memberName(accounts, family.leader2_id),
+      memberName(accounts, family.leader1_id, family.leader1_display_name),
+      memberName(accounts, family.leader2_id, family.leader2_display_name),
     ].some((value) =>
       String(value || "")
         .toLowerCase()
@@ -6033,13 +6051,29 @@ export function LocationDetailPage() {
                     {[
                       {
                         label: "Leader",
-                        value: memberName(accounts, zone.leader1_id),
-                        subtitle: memberPhone(accounts, zone.leader1_id),
+                        value: memberName(
+                          accounts,
+                          zone.leader1_id,
+                          zone.leader1_display_name,
+                        ),
+                        subtitle: memberPhone(
+                          accounts,
+                          zone.leader1_id,
+                          zone.leader1_phone_number,
+                        ),
                       },
                       {
                         label: "Assistant",
-                        value: memberName(accounts, zone.leader2_id),
-                        subtitle: memberPhone(accounts, zone.leader2_id),
+                        value: memberName(
+                          accounts,
+                          zone.leader2_id,
+                          zone.leader2_display_name,
+                        ),
+                        subtitle: memberPhone(
+                          accounts,
+                          zone.leader2_id,
+                          zone.leader2_phone_number,
+                        ),
                       },
                       {
                         label: "Missional Families",
@@ -6173,13 +6207,29 @@ export function LocationDetailPage() {
                       },
                       {
                         label: "Leader",
-                        value: memberName(accounts, family.leader1_id),
-                        subtitle: memberPhone(accounts, family.leader1_id),
+                        value: memberName(
+                          accounts,
+                          family.leader1_id,
+                          family.leader1_display_name,
+                        ),
+                        subtitle: memberPhone(
+                          accounts,
+                          family.leader1_id,
+                          family.leader1_phone_number,
+                        ),
                       },
                       {
                         label: "Assistant",
-                        value: memberName(accounts, family.leader2_id),
-                        subtitle: memberPhone(accounts, family.leader2_id),
+                        value: memberName(
+                          accounts,
+                          family.leader2_id,
+                          family.leader2_display_name,
+                        ),
+                        subtitle: memberPhone(
+                          accounts,
+                          family.leader2_id,
+                          family.leader2_phone_number,
+                        ),
                       },
                       {
                         label: "Members",
@@ -7901,13 +7951,13 @@ export function LocationDetailPage() {
       idsEqual(item.id, member.user_id),
     );
     return [
-      memberName(accounts, member.user_id),
+      memberName(accounts, member.user_id, member.user_display_name),
       member.audience,
       member.status,
       member.start_date,
-      memberAccount?.email,
-      memberAccount?.phone_number,
-      memberAccount?.address,
+      member.user_email || memberAccount?.email,
+      member.user_phone_number || memberAccount?.phone_number,
+      member.user_address || memberAccount?.address,
       memberAccount?.marital_status,
       memberAccount?.occupation,
       memberAccount?.gender,
@@ -7988,7 +8038,11 @@ export function LocationDetailPage() {
             const memberAccount = accounts.find((item) =>
               idsEqual(item.id, member.user_id),
             );
-            const memberDisplayName = memberName(accounts, member.user_id);
+            const memberDisplayName = memberName(
+              accounts,
+              member.user_id,
+              member.user_display_name,
+            );
             const memberActionsButton = (
               <IconButton
                 size="small"
@@ -8016,17 +8070,32 @@ export function LocationDetailPage() {
               },
               {
                 label: "Email",
-                value: accountDetail(accounts, member.user_id, "email"),
+                value: accountDetail(
+                  accounts,
+                  member.user_id,
+                  "email",
+                  member.user_email,
+                ),
                 icon: <EmailIcon color="secondary" fontSize="small" />,
               },
               {
                 label: "Phone",
-                value: accountDetail(accounts, member.user_id, "phone_number"),
+                value: accountDetail(
+                  accounts,
+                  member.user_id,
+                  "phone_number",
+                  member.user_phone_number,
+                ),
                 icon: <PhoneIcon color="secondary" fontSize="small" />,
               },
               {
                 label: "Address",
-                value: accountDetail(accounts, member.user_id, "address"),
+                value: accountDetail(
+                  accounts,
+                  member.user_id,
+                  "address",
+                  member.user_address,
+                ),
                 icon: <LocationOnIcon color="secondary" fontSize="small" />,
               },
             ];
@@ -8038,6 +8107,7 @@ export function LocationDetailPage() {
                 <Box sx={{ position: "relative", bgcolor: "action.hover" }}>
                   <Avatar
                     src={
+                      member.user_profile_picture ||
                       memberAccount?.profile_picture ||
                       defaultProfilePictureAsset
                     }
@@ -10081,18 +10151,28 @@ export function LocationDetailPage() {
                               {[
                                 {
                                   label: "Leader",
-                                  value: memberName(accounts, zone.leader1_id),
+                                  value: memberName(
+                                    accounts,
+                                    zone.leader1_id,
+                                    zone.leader1_display_name,
+                                  ),
                                   subtitle: memberPhone(
                                     accounts,
                                     zone.leader1_id,
+                                    zone.leader1_phone_number,
                                   ),
                                 },
                                 {
                                   label: "Assistant",
-                                  value: memberName(accounts, zone.leader2_id),
+                                  value: memberName(
+                                    accounts,
+                                    zone.leader2_id,
+                                    zone.leader2_display_name,
+                                  ),
                                   subtitle: memberPhone(
                                     accounts,
                                     zone.leader2_id,
+                                    zone.leader2_phone_number,
                                   ),
                                 },
                                 {
@@ -10223,10 +10303,12 @@ export function LocationDetailPage() {
                                   value: memberName(
                                     accounts,
                                     family.leader1_id,
+                                    family.leader1_display_name,
                                   ),
                                   subtitle: memberPhone(
                                     accounts,
                                     family.leader1_id,
+                                    family.leader1_phone_number,
                                   ),
                                 },
                                 {
@@ -10234,10 +10316,12 @@ export function LocationDetailPage() {
                                   value: memberName(
                                     accounts,
                                     family.leader2_id,
+                                    family.leader2_display_name,
                                   ),
                                   subtitle: memberPhone(
                                     accounts,
                                     family.leader2_id,
+                                    family.leader2_phone_number,
                                   ),
                                 },
                                 {
@@ -12427,7 +12511,11 @@ export function LocationDetailPage() {
                 <MenuItem value="">Not assigned</MenuItem>
                 {members.map((member) => (
                   <MenuItem key={member.id} value={member.user_id || ""}>
-                    {memberName(accounts, member.user_id)}
+                    {memberName(
+                      accounts,
+                      member.user_id,
+                      member.user_display_name,
+                    )}
                   </MenuItem>
                 ))}
               </TextField>
@@ -12446,7 +12534,11 @@ export function LocationDetailPage() {
                 <MenuItem value="">Not assigned</MenuItem>
                 {members.map((member) => (
                   <MenuItem key={member.id} value={member.user_id || ""}>
-                    {memberName(accounts, member.user_id)}
+                    {memberName(
+                      accounts,
+                      member.user_id,
+                      member.user_display_name,
+                    )}
                   </MenuItem>
                 ))}
               </TextField>
@@ -12554,7 +12646,11 @@ export function LocationDetailPage() {
         maxWidth="sm"
       >
         <DialogTitle>
-          {memberName(accounts, selectedMemberAction?.user_id)}
+          {memberName(
+            accounts,
+            selectedMemberAction?.user_id,
+            selectedMemberAction?.user_display_name,
+          )}
         </DialogTitle>
         <DialogContent>
           <List
@@ -13129,13 +13225,21 @@ export function LocationDetailPage() {
                     secondaryAction={
                       canManageLocationResources ? (
                         <IconButton
-                          aria-label={`Remove ${memberName(accounts, member.member_id)}`}
+                          aria-label={`Remove ${memberName(
+                            accounts,
+                            member.member_id,
+                            member.member_display_name,
+                          )}`}
                           color="error"
                           size="small"
                           onClick={() =>
                             requestDeleteConfirmation(
                               "Remove Family Member?",
-                              `This will remove ${memberName(accounts, member.member_id)} from this missional family.`,
+                              `This will remove ${memberName(
+                                accounts,
+                                member.member_id,
+                                member.member_display_name,
+                              )} from this missional family.`,
                               () => removeSelectedFamilyMember(member),
                             )
                           }
@@ -13151,7 +13255,11 @@ export function LocationDetailPage() {
                       <CheckCircleIcon color="secondary" fontSize="small" />
                     </ListItemIcon>
                     <ListItemText
-                      primary={memberName(accounts, member.member_id)}
+                      primary={memberName(
+                        accounts,
+                        member.member_id,
+                        member.member_display_name,
+                      )}
                       secondary={member.status || "Active"}
                     />
                   </ListItem>
@@ -13248,7 +13356,11 @@ export function LocationDetailPage() {
                 <MenuItem value="">Not assigned</MenuItem>
                 {members.map((member) => (
                   <MenuItem key={member.id} value={member.user_id || ""}>
-                    {memberName(accounts, member.user_id)}
+                    {memberName(
+                      accounts,
+                      member.user_id,
+                      member.user_display_name,
+                    )}
                   </MenuItem>
                 ))}
               </TextField>
@@ -13267,7 +13379,11 @@ export function LocationDetailPage() {
                 <MenuItem value="">Not assigned</MenuItem>
                 {members.map((member) => (
                   <MenuItem key={member.id} value={member.user_id || ""}>
-                    {memberName(accounts, member.user_id)}
+                    {memberName(
+                      accounts,
+                      member.user_id,
+                      member.user_display_name,
+                    )}
                   </MenuItem>
                 ))}
               </TextField>
@@ -20703,13 +20819,21 @@ export function MissionalFamilyDetailPage() {
               <ListItem disableGutters>
                 <ListItemText
                   primary="Leader"
-                  secondary={memberName(accounts, missionalFamily.leader1_id)}
+                  secondary={memberName(
+                    accounts,
+                    missionalFamily.leader1_id,
+                    missionalFamily.leader1_display_name,
+                  )}
                 />
               </ListItem>
               <ListItem disableGutters>
                 <ListItemText
                   primary="Assistant"
-                  secondary={memberName(accounts, missionalFamily.leader2_id)}
+                  secondary={memberName(
+                    accounts,
+                    missionalFamily.leader2_id,
+                    missionalFamily.leader2_display_name,
+                  )}
                 />
               </ListItem>
             </List>
@@ -20753,7 +20877,11 @@ export function MissionalFamilyDetailPage() {
                     .map((member) => (
                       <ListItem key={member.id} divider disableGutters>
                         <ListItemText
-                          primary={memberName(accounts, member.member_id)}
+                          primary={memberName(
+                            accounts,
+                            member.member_id,
+                            member.member_display_name,
+                          )}
                           secondary={member.status || "Active"}
                         />
                       </ListItem>

@@ -220,6 +220,11 @@ export type Member = {
   id: string;
   location_id?: string | null;
   user_id?: string | null;
+  user_display_name?: string | null;
+  user_email?: string | null;
+  user_phone_number?: string | null;
+  user_address?: string | null;
+  user_profile_picture?: string | null;
   audience?: string | null;
   status?: string | null;
   start_date?: string | null;
@@ -399,7 +404,17 @@ export type Zone = {
   title?: string | null;
   description?: string | null;
   leader1_id?: string | null;
+  leader1_display_name?: string | null;
+  leader1_email?: string | null;
+  leader1_phone_number?: string | null;
+  leader1_address?: string | null;
+  leader1_profile_picture?: string | null;
   leader2_id?: string | null;
+  leader2_display_name?: string | null;
+  leader2_email?: string | null;
+  leader2_phone_number?: string | null;
+  leader2_address?: string | null;
+  leader2_profile_picture?: string | null;
   location_id?: string | null;
 };
 
@@ -408,7 +423,17 @@ export type MissionalFamily = {
   title?: string | null;
   description?: string | null;
   leader1_id?: string | null;
+  leader1_display_name?: string | null;
+  leader1_email?: string | null;
+  leader1_phone_number?: string | null;
+  leader1_address?: string | null;
+  leader1_profile_picture?: string | null;
   leader2_id?: string | null;
+  leader2_display_name?: string | null;
+  leader2_email?: string | null;
+  leader2_phone_number?: string | null;
+  leader2_address?: string | null;
+  leader2_profile_picture?: string | null;
   zone_id?: string | null;
 };
 
@@ -416,8 +441,14 @@ export type MissionalFamilyMember = {
   id: string;
   mf_id?: string | null;
   member_id?: string | null;
+  member_display_name?: string | null;
+  member_email?: string | null;
+  member_phone_number?: string | null;
+  member_address?: string | null;
+  member_profile_picture?: string | null;
   status?: string | null;
   added_by?: string | null;
+  added_by_display_name?: string | null;
 };
 
 export type MfAttendance = {
