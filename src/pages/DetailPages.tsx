@@ -2336,6 +2336,7 @@ export function LocationDetailPage() {
     description: "",
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [ministrySchedules, setMinistrySchedules] = useState<Schedule[]>([]);
   const [pendingReportCounts, setPendingReportCounts] = useState<
     Record<string, PendingReportSummary>
   >({});
@@ -2753,6 +2754,7 @@ export function LocationDetailPage() {
     setEvents([]);
     setRoles([]);
     setSchedules([]);
+    setMinistrySchedules([]);
     setPendingReportCounts({});
     setPendingReportDetailsByLocation({});
     setBranches([]);
@@ -3069,6 +3071,7 @@ export function LocationDetailPage() {
     if (!location?.owner_id) {
       setMinistryLocations([]);
       setMinistryMembers([]);
+      setMinistrySchedules([]);
       setPendingReportCounts({});
       setPendingReportDetailsByLocation({});
       return;
@@ -3076,19 +3079,19 @@ export function LocationDetailPage() {
     Promise.all([
       api.get<Location[]>(`/locations?owner_id=${location.owner_id}`),
       api.get<Member[]>(`/members?owner_id=${location.owner_id}`),
+      api.get<Schedule[]>(`/schedules?owner_id=${location.owner_id}`),
     ])
       .then(
-        ([
-          locationsResponse,
-          membersResponse,
-        ]) => {
-        setMinistryLocations(locationsResponse.data);
-        setMinistryMembers(membersResponse.data);
+        ([locationsResponse, membersResponse, schedulesResponse]) => {
+          setMinistryLocations(locationsResponse.data);
+          setMinistryMembers(membersResponse.data);
+          setMinistrySchedules(schedulesResponse.data);
         },
       )
       .catch(() => {
         setMinistryLocations([]);
         setMinistryMembers([]);
+        setMinistrySchedules([]);
         setPendingReportCounts({});
         setPendingReportDetailsByLocation({});
       });
@@ -7425,6 +7428,28 @@ export function LocationDetailPage() {
       ? mandatoryTypes
       : defaultMandatoryReportScheduleTypes;
   };
+  const reportWindowScheduleDates = (sender: Location) => {
+    const mandatoryTypes = mandatoryTypesForLocation(sender);
+    const allSchedules = ministrySchedules.length
+      ? ministrySchedules
+      : schedules;
+    const senderSchedules = allSchedules.filter(
+      (schedule) =>
+        idsEqual(schedule.location_id, sender.id) &&
+        mandatoryTypes.includes(schedule.type || ""),
+    );
+    return Array.from(
+      new Set(
+        senderSchedules.flatMap((schedule) =>
+          occurrenceDates(schedule, dayjs(), sender.reporting_start_date)
+            .filter((date) => !date.isAfter(dayjs(), "day"))
+            .map((date) => date.format("YYYY-MM-DD")),
+        ),
+      ),
+    )
+      .sort((left, right) => right.localeCompare(left))
+      .slice(0, 5);
+  };
   const openPendingReportDetails = async (sender: Location) => {
     if (!location?.owner_id) {
       return;
@@ -7486,6 +7511,11 @@ export function LocationDetailPage() {
   };
   const receivedReportLocationStats = activeReportSenderLocations.map(
     (sender) => {
+      const defaultScheduleDates = reportWindowScheduleDates(sender);
+      const defaultScheduleDateSet = new Set(defaultScheduleDates);
+      const hasManualDateFilter = Boolean(
+        reportFilters.startDate || reportFilters.endDate,
+      );
       const reportingStartDate =
         sender.reporting_start_date &&
         dayjs(sender.reporting_start_date).isValid()
@@ -7505,6 +7535,12 @@ export function LocationDetailPage() {
         .filter(
           (card) =>
             !reportingStartDate || card.scheduleDate >= reportingStartDate,
+        )
+        .filter(
+          (card) =>
+            hasManualDateFilter ||
+            !defaultScheduleDateSet.size ||
+            defaultScheduleDateSet.has(card.scheduleDate),
         );
       const approved = reports.filter(
         (card) => card.status === "Approved",
@@ -7537,7 +7573,9 @@ export function LocationDetailPage() {
         pendingReportSummary?.count ?? (pendingReportCountLoading ? "..." : 0);
       const hasPendingReports =
         typeof pendingReports === "number" && pendingReports > 0;
-      const scheduleDateRange = reportCardsScheduleDateRange(reports);
+      const scheduleDateRange = hasManualDateFilter
+        ? reportCardsScheduleDateRange(reports)
+        : formatScheduleDateRange(defaultScheduleDates);
       return {
         location: sender,
         reports: reports.length,
