@@ -163,6 +163,7 @@ import {
   type Zone,
 } from "../lib/api";
 import { getSessionAccount } from "../lib/session";
+import { useTerminology, type TerminologyKey } from "../lib/terminology";
 
 const locationTabActions = [
   "Create Post",
@@ -217,7 +218,6 @@ const blankActionForm = {
   role_scope_type: "Location",
   menu_scopes: [] as string[],
   start_date: "",
-  end_date: "",
   startdate: "",
   enddate: "",
   opening_balance: "",
@@ -418,6 +418,32 @@ const roleMenuScopes = [
   "Branches",
   "Reports",
 ];
+const roleMenuScopeTabIds: Record<string, number> = {
+  posts: 0,
+  members: 1,
+  zones: 1,
+  "missional families": 1,
+  finances: 2,
+  attendances: 3,
+  events: 4,
+  roles: 5,
+  schedules: 8,
+  branches: 9,
+  reports: 10,
+};
+const roleMenuScopeActionTabIds: Record<string, number[]> = {
+  posts: [0],
+  members: [1],
+  zones: [6],
+  "missional families": [7],
+  finances: [2, 15, 16],
+  attendances: [3],
+  events: [4],
+  roles: [5],
+  schedules: [8],
+  branches: [9],
+  reports: [10],
+};
 const createReportMenuOption = "Create Report";
 const reportSettingsMenuOption = "Settings";
 const allMinistryReportsMenuOption = "All Ministry Reports";
@@ -1591,6 +1617,75 @@ function effectiveLocationRole(roles: Role[], userId?: string | null) {
     })[0];
 }
 
+function menuScopedLocationTabIds(roles: Role[], userId?: string | null) {
+  const tabIds = new Set<number>();
+  roles
+    .filter(
+      (role) =>
+        role.user_id === userId &&
+        role.status === "Active" &&
+        role.scope !== "Location",
+    )
+    .forEach((role) => {
+      (role.scope || "")
+        .split(",")
+        .map((scope) => scope.trim().toLowerCase())
+        .forEach((scope) => {
+          const tabId = roleMenuScopeTabIds[scope];
+          if (tabId !== undefined) {
+            tabIds.add(tabId);
+          }
+        });
+    });
+  return Array.from(tabIds);
+}
+
+function menuScopedManagerActionTabIds(roles: Role[], userId?: string | null) {
+  const tabIds = new Set<number>();
+  roles
+    .filter(
+      (role) =>
+        role.user_id === userId &&
+        role.status === "Active" &&
+        role.scope !== "Location" &&
+        locationManagerRoles.includes(role.role || ""),
+    )
+    .forEach((role) => {
+      (role.scope || "")
+        .split(",")
+        .map((scope) => scope.trim().toLowerCase())
+        .forEach((scope) => {
+          roleMenuScopeActionTabIds[scope]?.forEach((tabId) =>
+            tabIds.add(tabId),
+          );
+        });
+    });
+  return Array.from(tabIds);
+}
+
+function menuScopedPastorActionTabIds(roles: Role[], userId?: string | null) {
+  const tabIds = new Set<number>();
+  roles
+    .filter(
+      (role) =>
+        role.user_id === userId &&
+        role.status === "Active" &&
+        role.scope !== "Location" &&
+        locationPastorRoles.includes(role.role || ""),
+    )
+    .forEach((role) => {
+      (role.scope || "")
+        .split(",")
+        .map((scope) => scope.trim().toLowerCase())
+        .forEach((scope) => {
+          roleMenuScopeActionTabIds[scope]?.forEach((tabId) =>
+            tabIds.add(tabId),
+          );
+        });
+    });
+  return Array.from(tabIds);
+}
+
 function DataGridPanel<T extends GridValidRowModel>({
   rows,
   columns,
@@ -2276,6 +2371,9 @@ export function LocationDetailPage() {
   const navigate = useNavigate();
   const routerLocation = useLocation();
   const account = getSessionAccount();
+  const ministryTerminologyId =
+    location?.owner_id || (account?.type !== "Personal" ? account?.id : null);
+  const { term } = useTerminology(ministryTerminologyId);
   const [activeTab, setActiveTab] = useState(10);
   const [cashbooks, setCashbooks] = useState<Cashbook[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -2326,14 +2424,14 @@ export function LocationDetailPage() {
     date: "",
     schedule_id: "",
     total_attendance: "",
-    description: "",
+    remarks: "",
   });
   const [mfAttendanceEditForm, setMfAttendanceEditForm] = useState({
     adate: "",
     sg_id: "",
     schedule_id: "",
     total_number: "",
-    description: "",
+    remarks: "",
   });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [ministrySchedules, setMinistrySchedules] = useState<Schedule[]>([]);
@@ -2399,6 +2497,7 @@ export function LocationDetailPage() {
   const [selectedMemberAction, setSelectedMemberAction] =
     useState<Member | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
+  const [roleSearch, setRoleSearch] = useState("");
   const [zoneSearch, setZoneSearch] = useState("");
   const [familySearch, setFamilySearch] = useState("");
   const [memberDetailsOpen, setMemberDetailsOpen] = useState(false);
@@ -2431,8 +2530,6 @@ export function LocationDetailPage() {
     role: "",
     title: "",
     status: "Active",
-    start_date: "",
-    end_date: "",
   });
   const [branchActionAnchor, setBranchActionAnchor] =
     useState<null | HTMLElement>(null);
@@ -2711,6 +2808,21 @@ export function LocationDetailPage() {
       `/accounts/${account.id}/overview`,
     );
     setOverview(response.data);
+  };
+
+  const refreshMemberAssignmentSources = async () => {
+    if (!location?.owner_id || !location.id) {
+      return;
+    }
+    const [accountsResponse, locationMembersResponse, ministryMembersResponse] =
+      await Promise.all([
+        api.get<Account[]>("/accounts"),
+        api.get<Member[]>(`/members?location_id=${location.id}`),
+        api.get<Member[]>(`/members?owner_id=${location.owner_id}`),
+      ]);
+    setAccounts(accountsResponse.data);
+    setMembers(locationMembersResponse.data);
+    setMinistryMembers(ministryMembersResponse.data);
   };
 
   const rememberedLocationKey = account
@@ -3277,7 +3389,7 @@ export function LocationDetailPage() {
       type: targetTab === 9 ? "Branch" : "",
       recurrence: "",
       weekday: "",
-      start_date: [1, 5].includes(targetTab) ? today() : "",
+      start_date: targetTab === 1 ? today() : "",
       startdate: targetTab === 2 ? today() : "",
       date: targetTab === 3 ? today() : "",
       attendance_records: {},
@@ -3599,8 +3711,6 @@ export function LocationDetailPage() {
       role: selectedRoleAction.role || "",
       title: selectedRoleAction.title || selectedRoleAction.role || "",
       status: selectedRoleAction.status || "Active",
-      start_date: selectedRoleAction.start_date || "",
-      end_date: selectedRoleAction.end_date || "",
     });
     setRoleActionAnchor(null);
     setRoleEditOpen(true);
@@ -3612,14 +3722,18 @@ export function LocationDetailPage() {
     }
     setRelatedError("");
     try {
-      await api.patch(`/roles/${selectedRoleAction.id}`, {
-        requester_id: account.id,
-        role: roleEditForm.role,
-        title: roleEditForm.title || roleEditForm.role,
-        status: roleEditForm.status,
-        start_date: roleEditForm.start_date || null,
-        end_date: roleEditForm.end_date || null,
-      });
+      const payload = selectedRoleAction.cashbook_id
+        ? {
+            requester_id: account.id,
+            role: roleEditForm.role,
+          }
+        : {
+            requester_id: account.id,
+            role: roleEditForm.role,
+            title: roleEditForm.title || roleEditForm.role,
+            status: roleEditForm.status,
+          };
+      await api.patch(`/roles/${selectedRoleAction.id}`, payload);
       setRoleEditOpen(false);
       setSelectedRoleAction(null);
       await loadRelatedRecords();
@@ -5222,7 +5336,7 @@ export function LocationDetailPage() {
           await api.post("/mf-attendances/bulk", {
             ...requesterPayload,
             sg_id: actionForm.sg_id,
-            description: actionForm.description,
+            remarks: actionForm.description,
             adate: attendanceDate,
             records,
           });
@@ -5286,7 +5400,7 @@ export function LocationDetailPage() {
             ...requesterPayload,
             location_id: location.id,
             date: actionForm.date || today(),
-            description: actionForm.description,
+            remarks: actionForm.description,
             records,
           });
         }
@@ -5315,8 +5429,6 @@ export function LocationDetailPage() {
           role: actionForm.role,
           title: actionForm.title || actionForm.role,
           scope: roleScope,
-          start_date: actionForm.start_date || null,
-          end_date: actionForm.end_date || null,
         });
       } else if (targetTab === 6) {
         await api.post("/zones", {
@@ -5370,6 +5482,9 @@ export function LocationDetailPage() {
         });
       }
       await loadRelatedRecords(targetTab === 3 ? ["attendance"] : ["all"]);
+      if (targetTab === 1) {
+        await refreshMemberAssignmentSources();
+      }
       setActionForm(blankActionForm);
       setFeedback({
         severity: "success",
@@ -5418,13 +5533,7 @@ export function LocationDetailPage() {
         audience: actionForm.audience,
         start_date: actionForm.start_date || null,
       });
-      await Promise.all([
-        loadRelatedRecords(),
-        api
-          .get<Account[]>("/accounts")
-          .then((response) => setAccounts(response.data))
-          .catch(() => undefined),
-      ]);
+      await Promise.all([loadRelatedRecords(), refreshMemberAssignmentSources()]);
       setActionForm(blankActionForm);
       setFeedback({
         severity: "success",
@@ -5612,7 +5721,7 @@ export function LocationDetailPage() {
           selectedAttendance.total_attendance == null
             ? ""
             : String(selectedAttendance.total_attendance),
-        description: selectedAttendance.description || "",
+        remarks: selectedAttendance.remarks || "",
       });
       setAttendanceEditError("");
       setAttendanceEditOpen(true);
@@ -5625,7 +5734,7 @@ export function LocationDetailPage() {
           selectedMfAttendance.total_number == null
             ? ""
             : String(selectedMfAttendance.total_number),
-        description: selectedMfAttendance.description || "",
+        remarks: selectedMfAttendance.remarks || "",
       });
       setAttendanceEditError("");
       setMfAttendanceEditOpen(true);
@@ -5644,7 +5753,7 @@ export function LocationDetailPage() {
         date: attendanceEditForm.date || null,
         schedule_id: attendanceEditForm.schedule_id || null,
         total_attendance: Number(attendanceEditForm.total_attendance || 0),
-        description: attendanceEditForm.description,
+        remarks: attendanceEditForm.remarks,
       });
       setAttendanceEditOpen(false);
       setSelectedAttendance(null);
@@ -5668,7 +5777,7 @@ export function LocationDetailPage() {
         sg_id: mfAttendanceEditForm.sg_id || null,
         schedule_id: mfAttendanceEditForm.schedule_id || null,
         total_number: Number(mfAttendanceEditForm.total_number || 0),
-        description: mfAttendanceEditForm.description,
+        remarks: mfAttendanceEditForm.remarks,
       });
       setMfAttendanceEditOpen(false);
       setSelectedMfAttendance(null);
@@ -5711,7 +5820,7 @@ export function LocationDetailPage() {
   const isLocationOwner = Boolean(account && location?.owner_id === account.id);
   const activeLocationRole =
     currentOwnerRole?.role || (isLocationOwner ? "Location Admin" : "");
-  const activeRoleNames = roles
+  const activeLocationRoleNames = roles
     .filter(
       (role) =>
         role.user_id === account?.id &&
@@ -5719,30 +5828,65 @@ export function LocationDetailPage() {
         role.status === "Active",
     )
     .map((role) => role.role || "");
+  const activeRoleNames = roles
+    .filter(
+      (role) =>
+        role.user_id === account?.id &&
+        role.status === "Active",
+    )
+    .map((role) => role.role || "");
   const hasActiveRole = (roleNames: string[]) =>
     activeRoleNames.some((role) => roleNames.includes(role));
+  const hasActiveLocationRole = (roleNames: string[]) =>
+    activeLocationRoleNames.some((role) => roleNames.includes(role));
   const isLocationManagerForUi =
     isLocationOwner || locationManagerRoles.includes(activeLocationRole);
+  const menuScopedTabIds = menuScopedLocationTabIds(roles, account?.id);
+  const menuScopedManagerTabIds = menuScopedManagerActionTabIds(
+    roles,
+    account?.id,
+  );
+  const menuScopedPastorTabIds = menuScopedPastorActionTabIds(
+    roles,
+    account?.id,
+  );
+  const canManageLocationActionTab = (tabId: number) =>
+    isLocationManagerForUi || menuScopedManagerTabIds.includes(tabId);
   const canViewLocationAsViewer =
-    !isLocationManagerForUi && hasActiveRole(["Viewer", "Evaluator"]);
-  const hasZoneScopedRole = hasActiveRole(zoneScopedRoles);
-  const hasFamilyScopedRole = hasActiveRole(familyScopedRoles);
+    !isLocationManagerForUi && hasActiveLocationRole(["Viewer", "Evaluator"]);
+  const hasZoneScopedRole = hasActiveLocationRole(zoneScopedRoles);
+  const hasFamilyScopedRole = hasActiveLocationRole(familyScopedRoles);
   const hasScopedLeadershipRole = hasZoneScopedRole || hasFamilyScopedRole;
-  const canOpenManageTab = isLocationManagerForUi;
+  const canOpenManageTab =
+    isLocationManagerForUi ||
+    menuScopedTabIds.some((tabId) => manageLocationContentTabs.includes(tabId));
   const canApproveReportsForUi =
     isLocationOwner ||
     locationPastorRoles.includes(activeLocationRole) ||
+    canManageLocationActionTab(10) ||
     hasActiveRole(["Reports Approver"]);
   const canApproveRequisitionsForUi =
     isLocationOwner ||
     locationPastorRoles.includes(activeLocationRole) ||
+    canManageLocationActionTab(2) ||
     hasActiveRole(["Requisitions Approver"]);
   const canCreatePrivateCashbooks =
     locationPastorRoles.includes(activeLocationRole) ||
-    hasActiveRole(locationPastorRoles);
+    hasActiveLocationRole(locationPastorRoles) ||
+    menuScopedPastorTabIds.includes(2);
+  const activeResourceTab =
+    activeTab === 1
+      ? membershipView === "zones"
+        ? 6
+        : membershipView === "missionalFamilies"
+          ? 7
+          : membershipView === "branches"
+            ? 9
+            : 1
+      : activeTab;
   const canManageLocationResources =
-    isLocationManagerForUi || hasScopedLeadershipRole;
-  const canManageLocationReports = isLocationManagerForUi;
+    canManageLocationActionTab(activeResourceTab) || hasScopedLeadershipRole;
+  const canManageLocationReports = canManageLocationActionTab(10);
   const isBranchLocation =
     String(location?.type || "").toLowerCase() === "branch";
   const isOfficeLocation =
@@ -5754,26 +5898,34 @@ export function LocationDetailPage() {
   const canUseAllMinistryReports =
     !isBranchLocation || Boolean(location?.is_hq);
   const visibleLocationTabs = (
-    activeLocationRole === "Location Member"
-      ? [8, 9]
-      : isLocationManagerForUi
+    isLocationManagerForUi
         ? [10, 2, 3, 1, 8, 9, 5, ...(subscriptionsEnforced ? [12] : [])]
+        : menuScopedTabIds.length
+          ? [
+              ...menuScopedTabIds,
+              ...(canApproveReportsForUi ? [10] : []),
+              ...(canApproveRequisitionsForUi ? [2] : []),
+            ]
+        : activeLocationRole === "Location Member"
+          ? [8, 9]
         : canViewLocationAsViewer
           ? [10, 2, 3, 1, 8, 9]
           : hasScopedLeadershipRole
             ? [1, 3, 8]
             : [
+                ...menuScopedTabIds,
                 ...(canApproveReportsForUi ? [10] : []),
                 ...(canApproveRequisitionsForUi ? [2] : []),
               ]
   )
     .filter(
       (tabId) =>
+        menuScopedTabIds.includes(tabId) ||
         isBranchLocation ||
         canViewLocationAsViewer ||
         ![3, 1, 9].includes(tabId),
     )
-    .filter((tabId) => !isOfficeLocation || tabId !== 11);
+    .filter((tabId) => menuScopedTabIds.includes(tabId) || !isOfficeLocation || tabId !== 11);
   useEffect(() => {
     if (
       !visibleLocationTabs.includes(activeTab) &&
@@ -5874,32 +6026,51 @@ export function LocationDetailPage() {
     },
     {
       value: "zones" as const,
-      label: "Zones",
+      label: term("zones"),
       icon: <HubIcon fontSize="small" />,
     },
     {
       value: "missionalFamilies" as const,
-      label: "Missional Families",
+      label: term("missionalFamilies"),
       icon: <Diversity2Icon fontSize="small" />,
     },
     {
       value: "branches" as const,
-      label: "Branches",
+      label: term("branches"),
       icon: <HomeWorkIcon fontSize="small" />,
     },
   ].filter(
-    (option) =>
-      (option.value === "branches" ? visibleLocationTabs.includes(9) : true) &&
-      (isLocationManagerForUi ||
+    (option) => {
+      const optionActionTab =
+        option.value === "zones"
+          ? 6
+          : option.value === "missionalFamilies"
+            ? 7
+            : option.value === "branches"
+              ? 9
+              : 1;
+      if (
+        menuScopedTabIds.includes(1) &&
+        !isLocationManagerForUi &&
+        !hasScopedLeadershipRole
+      ) {
+        return canManageLocationActionTab(optionActionTab);
+      }
+      return (
+        (option.value === "branches" ? visibleLocationTabs.includes(9) : true) &&
+        (isLocationManagerForUi ||
+        canManageLocationActionTab(optionActionTab) ||
         !hasScopedLeadershipRole ||
         hasZoneScopedRole ||
-        option.value === "missionalFamilies"),
+          option.value === "missionalFamilies")
+      );
+    },
   );
   const attendanceMenuOptions = [
-    { value: 0, label: "Location", icon: <HomeWorkIcon fontSize="small" /> },
+    { value: 0, label: term("location"), icon: <HomeWorkIcon fontSize="small" /> },
     {
       value: 1,
-      label: "Missional Families",
+      label: term("missionalFamilies"),
       icon: <Diversity2Icon fontSize="small" />,
     },
   ].filter(
@@ -6494,10 +6665,10 @@ export function LocationDetailPage() {
         sx={{ p: { xs: 3, sm: 4 } }}
       >
         <Typography variant="h5" sx={{ fontWeight: 900 }}>
-          Create New Location
+          Create New {term("location")}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          Add a ministry location without leaving this workspace.
+          Add a ministry {term("location").toLowerCase()} without leaving this workspace.
         </Typography>
         {locationError ? (
           <Alert severity="error" sx={{ mt: 2 }}>
@@ -6528,7 +6699,7 @@ export function LocationDetailPage() {
             />
           ) : null}
           <TextField
-            label="Location Name"
+            label={`${term("location")} Name`}
             value={locationForm.title}
             onChange={(event) =>
               updateLocationForm({ title: event.target.value })
@@ -6538,7 +6709,7 @@ export function LocationDetailPage() {
           />
           <TextField
             select
-            label="Location Type"
+            label={`${term("location")} Type`}
             value={locationForm.type}
             onChange={(event) =>
               updateLocationForm({ type: event.target.value })
@@ -6547,7 +6718,7 @@ export function LocationDetailPage() {
           >
             {["Branch", "Office"].map((option) => (
               <MenuItem key={option} value={option}>
-                {option}
+                {option === "Branch" ? term("branches").replace(/es$/i, "") : option}
               </MenuItem>
             ))}
           </TextField>
@@ -6677,7 +6848,17 @@ export function LocationDetailPage() {
   }
 
   const canCreateForActiveTab = (() => {
-    if (isLocationManagerForUi) {
+    const createActionTab =
+      activeTab === 1
+        ? membershipView === "zones"
+          ? 6
+          : membershipView === "missionalFamilies"
+            ? 7
+            : membershipView === "branches"
+              ? 9
+              : 1
+        : activeTab;
+    if (canManageLocationActionTab(createActionTab)) {
       return true;
     }
     if (activeTab === 1) {
@@ -7977,6 +8158,11 @@ export function LocationDetailPage() {
     "Location Admin",
     "Viewer",
   ]);
+  const editableCashbookRoleNames = new Set([
+    "Cashbook Admin",
+    "Cashbook Viewer",
+    "Data Entrant",
+  ]);
   const selectedMemberAccount = accounts.find((item) =>
     idsEqual(item.id, selectedMemberAction?.user_id),
   );
@@ -8219,12 +8405,13 @@ export function LocationDetailPage() {
         .filter(Boolean) as string[],
     ),
   );
+  const roleSearchValue = roleSearch.trim().toLowerCase();
   const displayRoles = (() => {
     const standardUsers = roles.filter(
       (role) => role.role === "Location Member",
     );
     const otherRoles = roles.filter((role) => role.role !== "Location Member");
-    return standardUsers.length
+    const preparedRoles = standardUsers.length
       ? [
           ...otherRoles,
           {
@@ -8236,6 +8423,24 @@ export function LocationDetailPage() {
           },
         ]
       : otherRoles;
+    if (!roleSearchValue) {
+      return preparedRoles;
+    }
+    return preparedRoles.filter((role) => {
+      const haystack = [
+        role.role,
+        role.title,
+        role.user_display_name,
+        role.cashbook_title,
+        role.id === "__owner_role__"
+          ? "All Members"
+          : memberName(accounts, role.user_id),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(roleSearchValue);
+    });
   })();
   const roleCardGroups = Array.from(
     displayRoles
@@ -8325,7 +8530,7 @@ export function LocationDetailPage() {
           list: { role: "menubar", "aria-labelledby": "location-tab-13" },
         }}
       >
-        {canOpenManageTab ? (
+        {isLocationManagerForUi ? (
           <MenuItem
             onClick={() => {
               setRoleMenuAnchor(null);
@@ -8374,20 +8579,20 @@ export function LocationDetailPage() {
             Set as HQ
           </MenuItem>
         ) : null}
-        {canOpenManageTab ? (
+        {isLocationManagerForUi ? (
           <MenuItem onClick={openLocationParticulars}>
             <ListItemIcon>
               <CollectionsBookmarkIcon fontSize="small" />
             </ListItemIcon>
-            Particulars
+            {term("particulars")}
           </MenuItem>
         ) : null}
-        {canOpenManageTab ? (
+        {isLocationManagerForUi ? (
           <MenuItem onClick={openLocationRemissions}>
             <ListItemIcon>
               <PaidIcon fontSize="small" />
             </ListItemIcon>
-            Remissions
+            {term("remissions")}
           </MenuItem>
         ) : null}
         {canOpenManageTab && visibleLocationTabs.includes(5) ? (
@@ -8454,10 +8659,10 @@ export function LocationDetailPage() {
           mb: 2,
         }}
       >
-        <Tooltip title="Switch Location">
+        <Tooltip title={`Switch ${term("location")}`}>
           <IconButton
             color="secondary"
-            aria-label="Switch Location"
+            aria-label={`Switch ${term("location")}`}
             onClick={() => setLocationChooserOpen(true)}
             sx={{ border: 1, borderColor: "divider" }}
           >
@@ -8465,10 +8670,10 @@ export function LocationDetailPage() {
           </IconButton>
         </Tooltip>
         {canCreateLocations ? (
-          <Tooltip title="Add Location">
+          <Tooltip title={`Add ${term("location")}`}>
             <IconButton
               color="primary"
-              aria-label="Add Location"
+              aria-label={`Add ${term("location")}`}
               onClick={openCreateLocationDrawer}
               sx={{
                 bgcolor: "primary.main",
@@ -8911,6 +9116,7 @@ export function LocationDetailPage() {
                 activeTab !== 1 &&
                 activeTab !== 2 &&
                 activeTab !== 3 &&
+                activeTab !== 5 &&
                 activeTab !== 10 &&
                 activeTab !== 11 ? (
                   <CircularAddButton
@@ -9734,13 +9940,52 @@ export function LocationDetailPage() {
                 </ResourceGrid>
               </TabPanel>
               <TabPanel value={activeTab} index={5}>
-                {roleCardGroups.length === 0 ? (
-                  <EmptyState
-                    title="No roles for this location yet"
-                    message="Assigned location roles will appear here."
-                  />
-                ) : (
-                  <Grid container spacing={2}>
+                <Stack spacing={2}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: "center", minWidth: 0 }}
+                  >
+                    <TextField
+                      label="Search Roles"
+                      value={roleSearch}
+                      onChange={(event) => setRoleSearch(event.target.value)}
+                      size="small"
+                      sx={{ flex: "1 1 auto", minWidth: 0 }}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon fontSize="small" />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    {canCreateForActiveTab ? (
+                      <Box sx={{ flex: "0 0 auto" }}>
+                        <CircularAddButton
+                          label={activeTabCreateLabel}
+                          onClick={openActiveTabCreate}
+                        />
+                      </Box>
+                    ) : null}
+                  </Stack>
+                  {roleCardGroups.length === 0 ? (
+                    <EmptyState
+                      title={
+                        roleSearchValue
+                          ? "No matching roles"
+                          : "No roles for this location yet"
+                      }
+                      message={
+                        roleSearchValue
+                          ? "Try a different role, person, or cashbook title."
+                          : "Assigned location roles will appear here."
+                      }
+                    />
+                  ) : (
+                    <Grid container spacing={2}>
                     {roleCardGroups.map(({ roleName, records }) => (
                       <Grid key={roleName} size={{ xs: 12, md: 4 }}>
                         <Paper
@@ -9765,98 +10010,188 @@ export function LocationDetailPage() {
                               {roleName}
                             </Typography>
                           </Box>
-                          <List dense disablePadding sx={{ p: 1.25 }}>
-                            {records.map((role) => {
-                              const personName =
-                                role.id === "__owner_role__"
-                                  ? "All Members"
-                                  : role.user_display_name ||
-                                    memberName(accounts, role.user_id);
-                              const secondaryText = [
-                                role.title && role.title !== role.role
-                                  ? role.title
-                                  : null,
-                                role.status || null,
-                                role.start_date
-                                  ? `From ${role.start_date}`
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" - ");
-                              return (
-                                <ListItem
-                                  key={role.id}
-                                  disableGutters
-                                  secondaryAction={
-                                    role.id === "__owner_role__" ? null : (
-                                      <IconButton
-                                        size="small"
-                                        aria-label="Role actions"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          setSelectedRoleAction(role);
-                                          setRoleActionAnchor(
-                                            event.currentTarget,
-                                          );
-                                        }}
+                          <List dense disablePadding>
+                            {records.some((role) => role.cashbook_id)
+                              ? Array.from(
+                                  records
+                                    .reduce<
+                                      Map<
+                                        string,
+                                        { cashbookTitle: string; roles: Role[] }
                                       >
-                                        <MoreVertIcon fontSize="small" />
-                                      </IconButton>
-                                    )
-                                  }
-                                  sx={{
-                                    border: 1,
-                                    borderColor: "divider",
-                                    borderRadius: 1,
-                                    mb: 1,
-                                    px: 1.25,
-                                    py: 0.75,
-                                    pr: role.id === "__owner_role__" ? 1.25 : 5,
-                                  }}
-                                >
-                                  <ListItemIcon sx={{ minWidth: 34 }}>
-                                    <CheckCircleIcon
-                                      color="secondary"
-                                      fontSize="small"
-                                    />
-                                  </ListItemIcon>
-                                  <ListItemText
-                                    primary={
-                                      <Stack
-                                        direction="row"
-                                        spacing={1}
-                                        sx={{
-                                          alignItems: "center",
-                                          minWidth: 0,
+                                    >((groups, role) => {
+                                      const cashbookTitle =
+                                        role.cashbook_title ||
+                                        (role.cashbook_id
+                                          ? `Cashbook #${role.cashbook_id}`
+                                          : "Cashbook");
+                                      const existing = groups.get(
+                                        cashbookTitle,
+                                      ) || {
+                                        cashbookTitle,
+                                        roles: [],
+                                      };
+                                      existing.roles.push(role);
+                                      groups.set(cashbookTitle, existing);
+                                      return groups;
+                                    }, new Map())
+                                    .values(),
+                                ).map((cashbookGroup, groupIndex, groups) => (
+                                  <Box key={cashbookGroup.cashbookTitle}>
+                                    <ListItem
+                                      disableGutters
+                                      sx={{
+                                        px: 2,
+                                        py: 0.75,
+                                        bgcolor: "action.hover",
+                                        borderBottom: 1,
+                                        borderColor: "divider",
+                                      }}
+                                    >
+                                      <ListItemText
+                                        primary={cashbookGroup.cashbookTitle}
+                                        slotProps={{
+                                          primary: {
+                                            variant: "caption",
+                                            sx: {
+                                              color: "text.secondary",
+                                              textTransform: "uppercase",
+                                            },
+                                          },
                                         }}
-                                      >
-                                        <Typography
-                                          variant="body2"
-                                          sx={{ minWidth: 0 }}
-                                          noWrap
+                                      />
+                                    </ListItem>
+                                    {cashbookGroup.roles.map((role, index) => {
+                                      const personName =
+                                        role.user_display_name ||
+                                        memberName(accounts, role.user_id);
+                                      return (
+                                        <ListItem
+                                          key={role.id}
+                                          divider={
+                                            index <
+                                              cashbookGroup.roles.length - 1 ||
+                                            groupIndex < groups.length - 1
+                                          }
+                                          secondaryAction={
+                                            <IconButton
+                                              size="small"
+                                              aria-label="Role actions"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                setSelectedRoleAction(role);
+                                                setRoleActionAnchor(
+                                                  event.currentTarget,
+                                                );
+                                              }}
+                                            >
+                                              <MoreVertIcon fontSize="small" />
+                                            </IconButton>
+                                          }
+                                          sx={{
+                                            px: 2,
+                                            py: 1,
+                                            pr: 6,
+                                          }}
                                         >
-                                          {personName}
-                                        </Typography>
-                                        {role.id === "__owner_role__" ? (
-                                          <Chip
+                                          <ListItemIcon sx={{ minWidth: 34 }}>
+                                            <CheckCircleIcon
+                                              color="secondary"
+                                              fontSize="small"
+                                            />
+                                          </ListItemIcon>
+                                          <ListItemText primary={personName} />
+                                        </ListItem>
+                                      );
+                                    })}
+                                  </Box>
+                                ))
+                              : records.map((role, index) => {
+                                  const personName =
+                                    role.id === "__owner_role__"
+                                      ? "All Members"
+                                      : role.user_display_name ||
+                                        memberName(accounts, role.user_id);
+                                  const secondaryText =
+                                    !["Location Pastor", "Location Admin"].includes(
+                                      role.role || "",
+                                    ) &&
+                                    role.title &&
+                                    role.title !== role.role
+                                      ? role.title
+                                      : "";
+                                  return (
+                                    <ListItem
+                                      key={role.id}
+                                      divider={index < records.length - 1}
+                                      secondaryAction={
+                                        role.id === "__owner_role__" ? null : (
+                                          <IconButton
                                             size="small"
-                                            color="secondary"
-                                            label={role.member_count || 0}
-                                          />
-                                        ) : null}
-                                      </Stack>
-                                    }
-                                    secondary={secondaryText || undefined}
-                                  />
-                                </ListItem>
-                              );
-                            })}
+                                            aria-label="Role actions"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setSelectedRoleAction(role);
+                                              setRoleActionAnchor(
+                                                event.currentTarget,
+                                              );
+                                            }}
+                                          >
+                                            <MoreVertIcon fontSize="small" />
+                                          </IconButton>
+                                        )
+                                      }
+                                      sx={{
+                                        px: 2,
+                                        py: 1,
+                                        pr:
+                                          role.id === "__owner_role__" ? 2 : 6,
+                                      }}
+                                    >
+                                      <ListItemIcon sx={{ minWidth: 34 }}>
+                                        <CheckCircleIcon
+                                          color="secondary"
+                                          fontSize="small"
+                                        />
+                                      </ListItemIcon>
+                                      <ListItemText
+                                        primary={
+                                          <Stack
+                                            direction="row"
+                                            spacing={1}
+                                            sx={{
+                                              alignItems: "center",
+                                              minWidth: 0,
+                                            }}
+                                          >
+                                            <Typography
+                                              variant="body2"
+                                              sx={{ minWidth: 0 }}
+                                              noWrap
+                                            >
+                                              {personName}
+                                            </Typography>
+                                            {role.id === "__owner_role__" ? (
+                                              <Chip
+                                                size="small"
+                                                color="secondary"
+                                                label={role.member_count || 0}
+                                              />
+                                            ) : null}
+                                          </Stack>
+                                        }
+                                        secondary={secondaryText || undefined}
+                                      />
+                                    </ListItem>
+                                  );
+                                })}
                           </List>
                         </Paper>
                       </Grid>
                     ))}
-                  </Grid>
-                )}
+                    </Grid>
+                  )}
+                </Stack>
               </TabPanel>
               <TabPanel value={activeTab} index={14}>
                 <Stack spacing={2.5}>
@@ -9965,11 +10300,11 @@ export function LocationDetailPage() {
               <TabPanel value={activeTab} index={15}>
                 <Stack spacing={2}>
                   <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                    Particulars
+                    {term("particulars")}
                   </Typography>
                   <TextField
                     size="small"
-                    label="Search particulars"
+                    label={`Search ${term("particulars").toLowerCase()}`}
                     value={locationParticularSearch}
                     onChange={(event) =>
                       setLocationParticularSearch(event.target.value)
@@ -10053,7 +10388,7 @@ export function LocationDetailPage() {
                     ))}
                     {!filteredLocationParticulars.length ? (
                       <ListItem disableGutters>
-                        <ListItemText primary="No particulars found" />
+                        <ListItemText primary={`No ${term("particulars").toLowerCase()} found`} />
                       </ListItem>
                     ) : null}
                   </List>
@@ -10062,12 +10397,12 @@ export function LocationDetailPage() {
               <TabPanel value={activeTab} index={16}>
                 <Stack spacing={2}>
                   <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                    Remissions
+                    {term("remissions")}
                   </Typography>
                   {locationRemissions.length === 0 ? (
                     <EmptyState
-                      title="No remissions for this location yet"
-                      message="Create remissions to see them here."
+                      title={`No ${term("remissions").toLowerCase()} for this ${term("location").toLowerCase()} yet`}
+                      message={`Create ${term("remissions").toLowerCase()} to see them here.`}
                     />
                   ) : (
                     <List
@@ -10137,8 +10472,8 @@ export function LocationDetailPage() {
               <TabPanel value={activeTab} index={6}>
                 {zones.length === 0 ? (
                   <EmptyState
-                    title="No zones for this location yet"
-                    message="Create a zone to see it here."
+                    title={`No ${term("zones").toLowerCase()} for this ${term("location").toLowerCase()} yet`}
+                    message={`Create ${term("zones").toLowerCase()} to see them here.`}
                   />
                 ) : (
                   <Grid container spacing={2}>
@@ -10166,13 +10501,13 @@ export function LocationDetailPage() {
                                   variant="overline"
                                   color="text.secondary"
                                 >
-                                  Zone
+                                  {term("zones").replace(/s$/i, "")}
                                 </Typography>
                                 <Typography
                                   variant="h6"
                                   sx={{ fontWeight: 800, mt: 0.25 }}
                                 >
-                                  {zone.title || `Zone #${zone.id}`}
+                                  {zone.title || `${term("zones").replace(/s$/i, "")} #${zone.id}`}
                                 </Typography>
                               </Box>
                               {canManageLocationResources ? (
@@ -10214,7 +10549,7 @@ export function LocationDetailPage() {
                                   ),
                                 },
                                 {
-                                  label: "Missional Families",
+                                  label: term("missionalFamilies"),
                                   value: String(
                                     missionalFamilies.filter(
                                       (family) => family.zone_id === zone.id,
@@ -10440,7 +10775,7 @@ export function LocationDetailPage() {
                   attendances={attendances}
                   startDate={location.reporting_start_date}
                   mandatoryTypes={mandatoryTypesForLocation(location)}
-                  canManage={isLocationManagerForUi}
+                  canManage={canManageLocationActionTab(8)}
                   onDetails={setScheduleDetails}
                   onEdit={openScheduleEdit}
                   onRemove={(schedule) =>
@@ -10464,7 +10799,7 @@ export function LocationDetailPage() {
                       sx={{ fontWeight: 900 }}
                       noWrap
                     >
-                      Branches
+                      {term("branches")}
                     </Typography>
                     <Chip
                       size="small"
@@ -10475,8 +10810,8 @@ export function LocationDetailPage() {
                   </Stack>
                   {branches.length === 0 ? (
                     <EmptyState
-                      title="No child branches for this location yet"
-                      message="Branches created under this location will appear here."
+                      title={`No child ${term("branches").toLowerCase()} for this ${term("location").toLowerCase()} yet`}
+                      message={`${term("branches")} created under this ${term("location").toLowerCase()} will appear here.`}
                     />
                   ) : (
                     <Grid container spacing={2}>
@@ -10500,18 +10835,18 @@ export function LocationDetailPage() {
                                     variant="overline"
                                     color="text.secondary"
                                   >
-                                    {branch.type || "Branch"}
+                                    {branch.type || term("branches").replace(/es$/i, "")}
                                   </Typography>
                                   <Typography
                                     variant="subtitle1"
                                     sx={{ fontWeight: 900 }}
                                   >
-                                    {branch.title || `Location #${branch.id}`}
+                                    {branch.title || `${term("location")} #${branch.id}`}
                                   </Typography>
                                 </Box>
                                 <IconButton
                                   size="small"
-                                  aria-label="Branch actions"
+                                  aria-label={`${term("branches").replace(/es$/i, "")} actions`}
                                   onClick={(event) => {
                                     setSelectedBranchAction(branch);
                                     setBranchActionAnchor(event.currentTarget);
@@ -11815,12 +12150,12 @@ export function LocationDetailPage() {
                 slotProps={{ htmlInput: { min: 0 } }}
               />
               <TextField
-                label="Description"
-                value={attendanceEditForm.description}
+                label="Remarks"
+                value={attendanceEditForm.remarks}
                 onChange={(event) =>
                   setAttendanceEditForm((current) => ({
                     ...current,
-                    description: event.target.value,
+                    remarks: event.target.value,
                   }))
                 }
                 multiline
@@ -11931,12 +12266,12 @@ export function LocationDetailPage() {
                 slotProps={{ htmlInput: { min: 0 } }}
               />
               <TextField
-                label="Description"
-                value={mfAttendanceEditForm.description}
+                label="Remarks"
+                value={mfAttendanceEditForm.remarks}
                 onChange={(event) =>
                   setMfAttendanceEditForm((current) => ({
                     ...current,
-                    description: event.target.value,
+                    remarks: event.target.value,
                   }))
                 }
                 multiline
@@ -12736,7 +13071,9 @@ export function LocationDetailPage() {
         onClose={closeRoleActionMenu}
       >
         {selectedRoleAction &&
-        editableLocationRoleNames.has(selectedRoleAction.role || "") ? (
+        (selectedRoleAction.cashbook_id
+          ? editableCashbookRoleNames.has(selectedRoleAction.role || "")
+          : editableLocationRoleNames.has(selectedRoleAction.role || "")) ? (
           [
             <MenuItem key="edit" onClick={openSelectedLocationRoleEdit}>
               <ListItemIcon>
@@ -13102,6 +13439,17 @@ export function LocationDetailPage() {
               fullWidth
               slotProps={{ input: { readOnly: true } }}
             />
+            {selectedRoleAction?.cashbook_id ? (
+              <TextField
+                label="Cashbook"
+                value={
+                  selectedRoleAction.cashbook_title ||
+                  `Cashbook #${selectedRoleAction.cashbook_id}`
+                }
+                fullWidth
+                slotProps={{ input: { readOnly: true } }}
+              />
+            ) : null}
             <TextField
               select
               label="Role"
@@ -13115,73 +13463,48 @@ export function LocationDetailPage() {
               }
               fullWidth
             >
-              {availableAssignableLocationRoles.map((role) => (
+              {(selectedRoleAction?.cashbook_id
+                ? Array.from(editableCashbookRoleNames)
+                : availableAssignableLocationRoles
+              ).map((role) => (
                 <MenuItem key={role} value={role}>
                   {role}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Title"
-              value={roleEditForm.title}
-              onChange={(event) =>
-                setRoleEditForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-            <TextField
-              select
-              label="Status"
-              value={roleEditForm.status}
-              onChange={(event) =>
-                setRoleEditForm((current) => ({
-                  ...current,
-                  status: event.target.value,
-                }))
-              }
-              fullWidth
-            >
-              {["Active", "Inactive"].map((status) => (
-                <MenuItem key={status} value={status}>
-                  {status}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, md: 6 }}>
+            {selectedRoleAction?.cashbook_id ? null : (
+              <>
                 <TextField
-                  label="Start Date"
-                  type="date"
-                  value={roleEditForm.start_date}
+                  label="Title"
+                  value={roleEditForm.title}
                   onChange={(event) =>
                     setRoleEditForm((current) => ({
                       ...current,
-                      start_date: event.target.value,
+                      title: event.target.value,
                     }))
                   }
-                  slotProps={{ inputLabel: { shrink: true } }}
                   fullWidth
                 />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
-                  label="End Date"
-                  type="date"
-                  value={roleEditForm.end_date}
+                  select
+                  label="Status"
+                  value={roleEditForm.status}
                   onChange={(event) =>
                     setRoleEditForm((current) => ({
                       ...current,
-                      end_date: event.target.value,
+                      status: event.target.value,
                     }))
                   }
-                  slotProps={{ inputLabel: { shrink: true } }}
                   fullWidth
-                />
-              </Grid>
-            </Grid>
+                >
+                  {["Active", "Inactive"].map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -13671,6 +13994,7 @@ export function LocationDetailPage() {
         attendances={attendances}
         mfAttendances={mfAttendances}
         attendanceCreateScope={attendanceCreateScope}
+        terminology={term}
         canCreatePrivateCashbooks={canCreatePrivateCashbooks}
         error={actionError}
         saving={actionSaving}
@@ -14468,7 +14792,7 @@ export function LocationDetailPage() {
         onClose={() => setLocationParticularsOpen(false)}
       >
         <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
-          <DialogTitle>Particulars</DialogTitle>
+          <DialogTitle>{term("particulars")}</DialogTitle>
           <DialogContent>
             {locationParticularError ? (
               <Alert severity="error" sx={{ mb: 2 }}>
@@ -14487,7 +14811,7 @@ export function LocationDetailPage() {
             >
               <TextField
                 size="small"
-                label="Particular"
+                label={term("particulars").replace(/s$/i, "")}
                 value={locationParticularForm.title}
                 onChange={(event) =>
                   setLocationParticularForm((current) => ({
@@ -14572,7 +14896,7 @@ export function LocationDetailPage() {
         onClose={() => setLocationRemissionsOpen(false)}
       >
         <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100%" }}>
-          <DialogTitle>Location Remissions</DialogTitle>
+          <DialogTitle>{`${term("location")} ${term("remissions")}`}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {remissionError ? (
@@ -14594,7 +14918,7 @@ export function LocationDetailPage() {
                   })
                 }
                 getOptionLabel={(particular) =>
-                  particular.title || `Particular #${particular.particular_id}`
+                  particular.title || `${term("particulars").replace(/s$/i, "")} #${particular.particular_id}`
                 }
                 isOptionEqualToValue={(option, value) =>
                   idsEqual(option.particular_id, value.particular_id)
@@ -14602,7 +14926,7 @@ export function LocationDetailPage() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Particular"
+                    label={term("particulars").replace(/s$/i, "")}
                     required
                     fullWidth
                   />
@@ -14679,7 +15003,7 @@ export function LocationDetailPage() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Location Details</DialogTitle>
+        <DialogTitle>{`${term("location")} Details`}</DialogTitle>
         <DialogContent>
           <List dense>
             <ListItem disableGutters>
@@ -14813,6 +15137,7 @@ type LocationActionDrawerProps = {
   attendances: Attendance[];
   mfAttendances: MfAttendance[];
   attendanceCreateScope: "location" | "mf";
+  terminology: (key: TerminologyKey) => string;
   canCreatePrivateCashbooks: boolean;
   error: string;
   saving: boolean;
@@ -15956,6 +16281,7 @@ function LocationActionDrawer({
   attendances,
   mfAttendances,
   attendanceCreateScope,
+  terminology,
   canCreatePrivateCashbooks,
   error,
   saving,
@@ -16057,13 +16383,13 @@ function LocationActionDrawer({
     activeTab === 2
       ? "CashBook Name"
       : activeTab === 6
-        ? "Zone Name"
+        ? `${terminology("zones").replace(/s$/i, "")} Name`
         : activeTab === 7
-          ? "Missional Family Name"
+          ? `${terminology("missionalFamilies")} Name`
           : activeTab === 8
             ? "Schedule Name"
             : activeTab === 9
-              ? "Location Name"
+              ? `${terminology("location")} Name`
               : "Title";
   const memberRegisterDisabled =
     saving ||
@@ -16129,7 +16455,7 @@ function LocationActionDrawer({
                 : activeTab === 5
                   ? "Assign Role"
                   : activeTab === 7
-                    ? "New Missional Family"
+                    ? `New ${terminology("missionalFamilies")}`
                     : activeTab === 8
                       ? "Create Schedule"
                       : actionLabel}
@@ -16258,7 +16584,7 @@ function LocationActionDrawer({
                   <FormControlLabel
                     value="Location"
                     control={<Radio />}
-                    label="Entire Location"
+                    label={`Entire ${terminology("location")}`}
                   />
                   <FormControlLabel
                     value="Menus"
@@ -16268,7 +16594,7 @@ function LocationActionDrawer({
                 </RadioGroup>
                 <TextField
                   select
-                  label="Location Menus"
+                  label={`${terminology("location")} Menus`}
                   value={form.menu_scopes}
                   onChange={(event) =>
                     onChange({
@@ -16504,7 +16830,7 @@ function LocationActionDrawer({
             {activeTab === 7 ? (
               <TextField
                 select
-                label="Zone"
+                label={terminology("zones").replace(/s$/i, "")}
                 value={form.zone_id}
                 onChange={(event) => onChange({ zone_id: event.target.value })}
                 required
@@ -16512,7 +16838,7 @@ function LocationActionDrawer({
               >
                 {zones.map((zone) => (
                   <MenuItem key={zone.id} value={String(zone.id)}>
-                    {zone.title || `Zone #${zone.id}`}
+                    {zone.title || `${terminology("zones").replace(/s$/i, "")} #${zone.id}`}
                   </MenuItem>
                 ))}
               </TextField>
@@ -16521,7 +16847,7 @@ function LocationActionDrawer({
               attendanceCreateScope === "mf" ? (
                 <TextField
                   select
-                  label="Missional Family"
+                  label={terminology("missionalFamilies")}
                   value={form.sg_id}
                   onChange={(event) => onChange({ sg_id: event.target.value })}
                   required
@@ -16529,7 +16855,7 @@ function LocationActionDrawer({
                 >
                   {missionalFamilies.map((family) => (
                     <MenuItem key={family.id} value={family.id}>
-                      {family.title || `Missional Family #${family.id}`}
+                      {family.title || `${terminology("missionalFamilies")} #${family.id}`}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -16697,10 +17023,10 @@ function LocationActionDrawer({
               </TextField>
             ) : null}
             {activeTab === 9 ? (
-              <TextField
-                label="Type"
-                value="Branch"
-                fullWidth
+                <TextField
+                  label="Type"
+                  value={terminology("branches").replace(/es$/i, "")}
+                  fullWidth
                 slotProps={{ input: { readOnly: true } }}
               />
             ) : null}
@@ -16721,28 +17047,6 @@ function LocationActionDrawer({
                 value={form.status}
                 onChange={(event) => onChange({ status: event.target.value })}
                 fullWidth
-              />
-            ) : null}
-            {activeTab === 5 ? (
-              <DatePicker
-                label="Start Date"
-                value={toPickerValue(form.start_date)}
-                onChange={(value) =>
-                  onChange({ start_date: fromPickerValue(value) })
-                }
-                disableFuture
-                slotProps={{ textField: { fullWidth: true } }}
-              />
-            ) : null}
-            {activeTab === 5 ? (
-              <DatePicker
-                label="End Date"
-                value={toPickerValue(form.end_date)}
-                onChange={(value) =>
-                  onChange({ end_date: fromPickerValue(value) })
-                }
-                disablePast
-                slotProps={{ textField: { fullWidth: true } }}
               />
             ) : null}
             {activeTab === 2 ? (
@@ -17031,7 +17335,7 @@ function LocationActionDrawer({
                     : null}
                 </Stack>
                 <TextField
-                  label="Description"
+                  label="Remarks"
                   value={form.description}
                   onChange={(event) =>
                     onChange({ description: event.target.value })
@@ -17044,7 +17348,7 @@ function LocationActionDrawer({
             ) : null}
             {activeTab === 3 && attendanceCreateScope === "location" ? (
               <TextField
-                label="Description"
+                label="Remarks"
                 value={form.description}
                 onChange={(event) =>
                   onChange({ description: event.target.value })

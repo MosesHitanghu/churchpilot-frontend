@@ -61,8 +61,6 @@ function roleDetailRows(role: Role) {
       role.authorizer_display_name ||
         (role.authorizer_id ? `Account #${role.authorizer_id}` : "Not set"),
     ],
-    role.start_date ? ["Start date", role.start_date] : null,
-    role.end_date ? ["End date", role.end_date] : null,
   ].filter(Boolean) as string[][];
 }
 

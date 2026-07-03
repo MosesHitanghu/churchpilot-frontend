@@ -212,8 +212,6 @@ export type Role = {
   location_title?: string | null;
   cashbook_title?: string | null;
   member_count?: number | null;
-  start_date?: string | null;
-  end_date?: string | null;
 };
 
 export type Member = {
@@ -301,7 +299,7 @@ export type SystemAdmin = {
 export type Attendance = {
   id: string;
   title?: string | null;
-  description?: string | null;
+  remarks?: string | null;
   type?: string | null;
   status?: string | null;
   date?: string | null;
@@ -454,7 +452,7 @@ export type MissionalFamilyMember = {
 export type MfAttendance = {
   id: string;
   title?: string | null;
-  description?: string | null;
+  remarks?: string | null;
   type?: string | null;
   total_number?: number | null;
   adate?: string | null;

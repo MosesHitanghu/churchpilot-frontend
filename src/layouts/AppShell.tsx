@@ -9,6 +9,7 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import MenuIcon from "@mui/icons-material/Menu";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PaidIcon from "@mui/icons-material/Paid";
+import TuneIcon from "@mui/icons-material/Tune";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import {
@@ -44,6 +45,14 @@ import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../co
 import { SiteFooter } from "../components/SiteFooter";
 import { api, type Account, type Location } from "../lib/api";
 import { clearSessionAccount, setSessionAccount } from "../lib/session";
+import {
+  saveTerminology,
+  terminologyDefaults,
+  terminologyMaxLength,
+  terminologyOptions,
+  useTerminology,
+  type TerminologySettings,
+} from "../lib/terminology";
 import type { AppThemeMode } from "../theme";
 
 const drawerWidth = 238;
@@ -74,6 +83,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
   const [accountMenuAnchor, setAccountMenuAnchor] = useState<null | HTMLElement>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [lastLocationPath, setLastLocationPath] = useState("");
   const [locationPageTitle, setLocationPageTitle] = useState("");
   const [connectionProblemOpen, setConnectionProblemOpen] = useState(false);
@@ -81,13 +91,15 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const navigate = useNavigate();
   const rememberedLocationKey = `church-admin:last-location:${account.id}`;
   const visibleNavItems = navItems.filter((item) => item.label !== "Roles" || account.type === "Personal");
+  const canCustomizeTerminology = account.type !== "Personal";
+  const { term } = useTerminology(canCustomizeTerminology ? account.id : null);
   const accountFullName = [account.fname, account.lname].filter(Boolean).join(" ") || account.title || account.username || "Account";
   const currentPageTitle = (() => {
     if (/^\/app\/cashbooks\/[^/]+$/.test(location.pathname)) {
       return "CashBook";
     }
     if (/^\/app\/locations\/[^/]+$/.test(location.pathname)) {
-      return locationPageTitle || "Location";
+      return locationPageTitle || term("location");
     }
     const activeItem = visibleNavItems.find((item) => item.path === location.pathname);
     return activeItem?.label || "Home";
@@ -115,19 +127,19 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
     api.get<Location>(`/locations/${match[1]}`)
       .then((response) => {
         if (active) {
-          setLocationPageTitle(response.data.title || `Location #${response.data.id}`);
+          setLocationPageTitle(response.data.title || `${term("location")} #${response.data.id}`);
         }
       })
       .catch(() => {
         if (active) {
-          setLocationPageTitle("Location");
+          setLocationPageTitle(term("location"));
         }
       });
 
     return () => {
       active = false;
     };
-  }, [location.pathname]);
+  }, [location.pathname, term]);
 
   useEffect(() => {
     const handleConnectionProblem = () => setConnectionProblemOpen(true);
@@ -279,6 +291,11 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
     setProfileOpen(true);
   };
 
+  const openCustomize = () => {
+    setAccountMenuAnchor(null);
+    setCustomizeOpen(true);
+  };
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
       <CssBaseline />
@@ -356,6 +373,14 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
                 </ListItemIcon>
                 Profile
               </MenuItem>
+              {canCustomizeTerminology ? (
+                <MenuItem onClick={openCustomize}>
+                  <ListItemIcon>
+                    <TuneIcon fontSize="small" />
+                  </ListItemIcon>
+                  Customize
+                </MenuItem>
+              ) : null}
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
                   <LogoutIcon fontSize="small" />
@@ -480,6 +505,13 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
         onClose={() => setProfileOpen(false)}
         onAccountUpdated={onAccountUpdated}
       />
+      {canCustomizeTerminology ? (
+        <TerminologyDrawer
+          account={account}
+          open={customizeOpen}
+          onClose={() => setCustomizeOpen(false)}
+        />
+      ) : null}
       <Box
         component="main"
         sx={{
@@ -516,6 +548,120 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
         </Alert>
       </Snackbar>
     </Box>
+  );
+}
+
+type TerminologyDrawerProps = {
+  account: Account;
+  open: boolean;
+  onClose: () => void;
+};
+
+function TerminologyDrawer({ account, open, onClose }: TerminologyDrawerProps) {
+  const { settings } = useTerminology(account.id);
+  const [form, setForm] = useState<TerminologySettings>(settings);
+  const [successOpen, setSuccessOpen] = useState(false);
+
+  useEffect(() => {
+    setForm(settings);
+  }, [settings, open]);
+
+  const updateForm = (key: keyof TerminologySettings, value: string) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value.slice(0, terminologyMaxLength),
+    }));
+  };
+
+  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    saveTerminology(account.id, form);
+    setSuccessOpen(true);
+  };
+
+  const handleReset = () => {
+    setForm(terminologyDefaults);
+    saveTerminology(account.id, terminologyDefaults);
+    setSuccessOpen(true);
+  };
+
+  return (
+    <>
+      <Drawer
+        anchor="right"
+        open={open}
+        onClose={onClose}
+        slotProps={{
+          root: {
+            sx: { zIndex: (theme) => theme.zIndex.modal },
+          },
+          paper: {
+            sx: {
+              width: { xs: "100%", sm: 440 },
+              maxWidth: "100%",
+              top: "0 !important",
+              height: "100dvh",
+              pointerEvents: "auto",
+            },
+          },
+        }}
+      >
+        <Box component="form" onSubmit={handleSave} sx={{ p: { xs: 3, sm: 4 } }}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 900 }}>
+                Customize
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Set ministry wording for all locations and branches.
+              </Typography>
+            </Box>
+            <IconButton onClick={onClose} aria-label="Close Customize Drawer">
+              <ChevronRightIcon />
+            </IconButton>
+          </Stack>
+          <Stack spacing={2}>
+            {terminologyOptions.map((option) => (
+              <TextField
+                key={option.key}
+                label={option.label}
+                value={form[option.key]}
+                onChange={(event) => updateForm(option.key, event.target.value)}
+                helperText={`${form[option.key].length}/${terminologyMaxLength}`}
+                fullWidth
+                slotProps={{
+                  htmlInput: { maxLength: terminologyMaxLength },
+                }}
+              />
+            ))}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+              <Button type="submit" variant="contained" fullWidth>
+                Save
+              </Button>
+              <Button variant="outlined" color="secondary" onClick={handleReset} fullWidth>
+                Reset
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Drawer>
+      <Snackbar
+        open={successOpen}
+        autoHideDuration={3000}
+        onClose={() => setSuccessOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 3 }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessOpen(false)}
+          sx={{ width: "100%" }}
+        >
+          Terminology saved.
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 
