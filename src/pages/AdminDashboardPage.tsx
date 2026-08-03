@@ -54,6 +54,7 @@ import Grid from "@mui/material/Grid";
 import { useTheme } from "@mui/material/styles";
 import { type ReactNode, useEffect, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
+import { PasswordField } from "../components/FormFields";
 import { SiteFooter } from "../components/SiteFooter";
 import { api, getApiErrorMessage, type Subscription, type SupportTicket, type SystemAdmin } from "../lib/api";
 
@@ -153,7 +154,7 @@ export function AdminDashboardPage() {
     return raw ? JSON.parse(raw) as SystemAdmin : null;
   });
   const [hasSuperAdmin, setHasSuperAdmin] = useState(true);
-  const [authForm, setAuthForm] = useState({ fname: "", lname: "", email: "", password: "", role: "Admin" });
+  const [authForm, setAuthForm] = useState({ fname: "", lname: "", email: "", phone_number: "", password: "", role: "Admin" });
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [subscriptionsEnforced, setSubscriptionsEnforced] = useState(false);
   const [accountApprovalsEnforced, setAccountApprovalsEnforced] = useState(false);
@@ -239,7 +240,7 @@ export function AdminDashboardPage() {
     setError("");
     try {
       await api.post("/system-admins/register", { ...authForm, requester_admin_id: admin.id });
-      setAuthForm({ fname: "", lname: "", email: "", password: "", role: "Admin" });
+      setAuthForm({ fname: "", lname: "", email: "", phone_number: "", password: "", role: "Admin" });
       loadDashboard();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Failed to add admin"));
@@ -322,8 +323,9 @@ export function AdminDashboardPage() {
               </Stack>
             ) : null}
             <TextField label="Email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} fullWidth />
-            <TextField label="Password" type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} fullWidth />
-            <Button variant="contained" onClick={submitAuth} disabled={saving || !authForm.email || !authForm.password}>{hasSuperAdmin ? "Login" : "Register Super Admin"}</Button>
+            {!hasSuperAdmin ? <TextField label="Phone" type="tel" value={authForm.phone_number} onChange={(event) => setAuthForm((current) => ({ ...current, phone_number: event.target.value }))} fullWidth /> : null}
+            <PasswordField label="Password" value={authForm.password} onValueChange={(value) => setAuthForm((current) => ({ ...current, password: value }))} fullWidth />
+            <Button variant="contained" onClick={submitAuth} disabled={saving || !authForm.email || !authForm.password || (!hasSuperAdmin && !authForm.phone_number)}>{hasSuperAdmin ? "Login" : "Register Super Admin"}</Button>
           </Stack>
         </Paper>
       </Box>
@@ -573,12 +575,13 @@ export function AdminDashboardPage() {
                     <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" label="First" value={authForm.fname} onChange={(event) => setAuthForm((current) => ({ ...current, fname: event.target.value }))} fullWidth /></Grid>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" label="Last" value={authForm.lname} onChange={(event) => setAuthForm((current) => ({ ...current, lname: event.target.value }))} fullWidth /></Grid>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" label="Email" value={authForm.email} onChange={(event) => setAuthForm((current) => ({ ...current, email: event.target.value }))} fullWidth /></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" label="Password" type="password" value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} fullWidth /></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" label="Phone" type="tel" value={authForm.phone_number} onChange={(event) => setAuthForm((current) => ({ ...current, phone_number: event.target.value }))} fullWidth /></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><PasswordField size="small" label="Password" value={authForm.password} onValueChange={(value) => setAuthForm((current) => ({ ...current, password: value }))} fullWidth /></Grid>
                     <Grid size={{ xs: 12, sm: 6 }}><TextField size="small" select label="Role" value={authForm.role} onChange={(event) => setAuthForm((current) => ({ ...current, role: event.target.value }))} fullWidth>{["Admin", "Super Admin"].map((role) => <MenuItem key={role} value={role}>{role}</MenuItem>)}</TextField></Grid>
-                    <Grid size={{ xs: 12, sm: 6 }}><Button variant="contained" onClick={addAdmin} disabled={saving || !authForm.email || !authForm.password} fullWidth>Add Admin</Button></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><Button variant="contained" onClick={addAdmin} disabled={saving || !authForm.email || !authForm.phone_number || !authForm.password} fullWidth>Add Admin</Button></Grid>
                   </Grid>
                   <List dense disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
-                    {admins.map((item) => <ListItem key={item.id} divider><ListItemText primary={adminName(item)} secondary={`${item.email} - ${item.role} - ${item.status}`} /></ListItem>)}
+                    {admins.map((item) => <ListItem key={item.id} divider><ListItemText primary={adminName(item)} secondary={`${item.email} - ${item.phone_number || "No phone"} - ${item.role} - ${item.status}`} /></ListItem>)}
                   </List>
                 </>
               ) : <Alert severity="info">Admin management is reserved for Super Admins.</Alert>}

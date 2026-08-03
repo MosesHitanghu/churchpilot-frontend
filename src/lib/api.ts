@@ -292,6 +292,7 @@ export type SystemAdmin = {
   fname?: string | null;
   lname?: string | null;
   email?: string | null;
+  phone_number?: string | null;
   role?: "Admin" | "Super Admin" | string | null;
   status?: string | null;
 };
