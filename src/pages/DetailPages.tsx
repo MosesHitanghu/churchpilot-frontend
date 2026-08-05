@@ -3760,6 +3760,25 @@ export function LocationDetailPage() {
     }
   };
 
+  const deactivateSelectedLocationMember = async () => {
+    if (!account || !selectedMemberAction) {
+      return;
+    }
+    setRelatedError("");
+    try {
+      await api.patch(`/members/${selectedMemberAction.id}`, {
+        requester_id: account.id,
+        status: "Inactive",
+      });
+      closeMemberActionMenu();
+      await loadRelatedRecords(["membership"]);
+    } catch (requestError) {
+      setRelatedError(
+        getApiErrorMessage(requestError, "Failed to deactivate member"),
+      );
+    }
+  };
+
   const deleteSelectedLocationRole = async () => {
     if (
       !account ||
@@ -12999,8 +13018,24 @@ export function LocationDetailPage() {
           <MenuItem
             onClick={() =>
               requestDeleteConfirmation(
+                "Deactivate Member?",
+                "This will deactivate the selected member without deleting their membership record.",
+                () => deactivateSelectedLocationMember(),
+              )
+            }
+          >
+            <ListItemIcon>
+              <BlockIcon fontSize="small" />
+            </ListItemIcon>
+            Deactivate
+          </MenuItem>
+        ) : null}
+        {isLocationManagerForUi ? (
+          <MenuItem
+            onClick={() =>
+              requestDeleteConfirmation(
                 "Delete Member?",
-                "This will remove the selected member from this location.",
+                "This permanently deletes the selected membership from this location.",
                 () => deleteSelectedLocationMember(),
               )
             }
