@@ -32,6 +32,7 @@ import {
   type Cashbook,
   getApiErrorMessage,
 } from "../lib/api";
+import { useTerminology } from "../lib/terminology";
 import { CashbookActionsMenu } from "./DetailPages";
 
 type AllCashBooksProps = {
@@ -153,6 +154,9 @@ function AllCashbooksSkeleton() {
 }
 
 export function AllCashBooks({ account }: AllCashBooksProps) {
+  const { term } = useTerminology(
+    account.type !== "Personal" ? account.id : null,
+  );
   const routerLocation = useLocation();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<AccountOverview | null>(null);
@@ -277,7 +281,7 @@ export function AllCashBooks({ account }: AllCashBooksProps) {
                               `CashBook #${cashbook.cashbook_id}`}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {cashbook.location_title || "Location"}
+                            {cashbook.location_title || term("location")}
                           </Typography>
                         </Box>
                         <CashbookActionsMenu

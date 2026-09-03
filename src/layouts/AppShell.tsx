@@ -43,13 +43,13 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
 import { SiteFooter } from "../components/SiteFooter";
-import { api, type Account, type Location } from "../lib/api";
+import { api, getApiErrorMessage, type Account, type Location } from "../lib/api";
 import { clearSessionAccount, setSessionAccount } from "../lib/session";
 import {
   saveTerminology,
   terminologyDefaults,
   terminologyMaxLength,
-  terminologyOptions,
+  type TerminologyKey,
   useTerminology,
   type TerminologySettings,
 } from "../lib/terminology";
@@ -72,6 +72,26 @@ const navItems = [
   { label: "All Cashbooks", path: "/app/financial", icon: <PaidIcon />, menu: "financial" },
   { label: "Support Center", path: "/app/support", icon: <HelpCenterIcon />, menu: "support" },
   { label: "Roles", path: "/app/roles", icon: <ManageAccountsIcon />, menu: "admins" },
+];
+
+const terminologyDrawerRows: { key: TerminologyKey; label: string }[][] = [
+  [
+    { key: "location", label: "Location" },
+    { key: "locations", label: "Locations" },
+  ],
+  [
+    { key: "zone", label: "Zone" },
+    { key: "zones", label: "Zones" },
+  ],
+  [
+    { key: "missionalFamily", label: "Missional Family" },
+    { key: "missionalFamilies", label: "Missional Families" },
+  ],
+  [
+    { key: "particulars", label: "Particulars" },
+    { key: "remissions", label: "Remissions" },
+  ],
+  [{ key: "branches", label: "Branches" }],
 ];
 
 export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccountUpdated }: AppShellProps) {
@@ -561,6 +581,8 @@ function TerminologyDrawer({ account, open, onClose }: TerminologyDrawerProps) {
   const { settings } = useTerminology(account.id);
   const [form, setForm] = useState<TerminologySettings>(settings);
   const [successOpen, setSuccessOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setForm(settings);
@@ -573,16 +595,27 @@ function TerminologyDrawer({ account, open, onClose }: TerminologyDrawerProps) {
     }));
   };
 
+  const persist = async (next: TerminologySettings) => {
+    setSaving(true);
+    setErrorMessage(null);
+    try {
+      await saveTerminology(account.id, next);
+      setSuccessOpen(true);
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Could not save terminology"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    saveTerminology(account.id, form);
-    setSuccessOpen(true);
+    void persist(form);
   };
 
   const handleReset = () => {
     setForm(terminologyDefaults);
-    saveTerminology(account.id, terminologyDefaults);
-    setSuccessOpen(true);
+    void persist(terminologyDefaults);
   };
 
   return (
@@ -621,24 +654,47 @@ function TerminologyDrawer({ account, open, onClose }: TerminologyDrawerProps) {
             </IconButton>
           </Stack>
           <Stack spacing={2}>
-            {terminologyOptions.map((option) => (
-              <TextField
-                key={option.key}
-                label={option.label}
-                value={form[option.key]}
-                onChange={(event) => updateForm(option.key, event.target.value)}
-                helperText={`${form[option.key].length}/${terminologyMaxLength}`}
-                fullWidth
-                slotProps={{
-                  htmlInput: { maxLength: terminologyMaxLength },
+            {terminologyDrawerRows.map((row, index) => (
+              <Box
+                key={row.map((option) => option.key).join("-")}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: row.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 1.5,
                 }}
-              />
+              >
+                {row.map((option) => (
+                  <TextField
+                    key={option.key}
+                    label={option.label}
+                    value={form[option.key]}
+                    onChange={(event) =>
+                      updateForm(option.key, event.target.value)
+                    }
+                    helperText={`${form[option.key].length}/${terminologyMaxLength}`}
+                    fullWidth
+                    autoFocus={index === 0 && option.key === "location"}
+                    slotProps={{
+                      htmlInput: { maxLength: terminologyMaxLength },
+                    }}
+                  />
+                ))}
+              </Box>
             ))}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-              <Button type="submit" variant="contained" fullWidth>
-                Save
+              <Button type="submit" variant="contained" fullWidth disabled={saving}>
+                {saving ? "Saving…" : "Save"}
               </Button>
-              <Button variant="outlined" color="secondary" onClick={handleReset} fullWidth>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleReset}
+                fullWidth
+                disabled={saving}
+              >
                 Reset
               </Button>
             </Stack>
@@ -659,6 +715,22 @@ function TerminologyDrawer({ account, open, onClose }: TerminologyDrawerProps) {
           sx={{ width: "100%" }}
         >
           Terminology saved.
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={Boolean(errorMessage)}
+        autoHideDuration={4000}
+        onClose={() => setErrorMessage(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 3 }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setErrorMessage(null)}
+          sx={{ width: "100%" }}
+        >
+          {errorMessage}
         </Alert>
       </Snackbar>
     </>

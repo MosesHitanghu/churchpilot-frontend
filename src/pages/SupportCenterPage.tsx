@@ -34,6 +34,7 @@ import {
   type Location,
   type SupportTicket,
 } from "../lib/api";
+import { useTerminology } from "../lib/terminology";
 
 type SupportCenterPageProps = {
   account: Account;
@@ -53,6 +54,9 @@ function readImage(
 }
 
 export function SupportCenterPage({ account }: SupportCenterPageProps) {
+  const { term, termMany } = useTerminology(
+    account.type !== "Personal" ? account.id : null,
+  );
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [open, setOpen] = useState(false);
@@ -219,7 +223,7 @@ export function SupportCenterPage({ account }: SupportCenterPageProps) {
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="Location"
+                        primary={term("location")}
                         secondary={ticket.location_title || "Not linked"}
                       />
                     </ListItem>
@@ -321,10 +325,10 @@ export function SupportCenterPage({ account }: SupportCenterPageProps) {
                   location_id: value?.id || "",
                 }))
               }
-              getOptionLabel={(location) => location.title || `Location #${location.id}`}
+              getOptionLabel={(location) => location.title || `${term("location")} #${location.id}`}
               isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
               renderInput={(params) => (
-                <TextField {...params} label="Related Location" helperText="Only locations connected to your account are shown." fullWidth />
+                <TextField {...params} label={`Related ${term("location")}`} helperText={`Only ${termMany("location").toLowerCase()} connected to your account are shown.`} fullWidth />
               )}
               fullWidth
             />

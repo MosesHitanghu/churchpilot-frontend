@@ -34,6 +34,8 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PaidIcon from "@mui/icons-material/Paid";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import LockResetIcon from "@mui/icons-material/LockReset";
 import PhoneIcon from "@mui/icons-material/Phone";
 import RateReviewIcon from "@mui/icons-material/RateReview";
 import ReceiptIcon from "@mui/icons-material/Receipt";
@@ -163,7 +165,7 @@ import {
   type Zone,
 } from "../lib/api";
 import { getSessionAccount } from "../lib/session";
-import { useTerminology, type TerminologyKey } from "../lib/terminology";
+import { singularize, useTerminology, type TerminologyKey } from "../lib/terminology";
 
 const locationTabActions = [
   "Create Post",
@@ -2501,6 +2503,19 @@ export function LocationDetailPage() {
   const [zoneSearch, setZoneSearch] = useState("");
   const [familySearch, setFamilySearch] = useState("");
   const [memberDetailsOpen, setMemberDetailsOpen] = useState(false);
+  const [memberPasswordResetOpen, setMemberPasswordResetOpen] = useState(false);
+  const [memberPasswordResetSaving, setMemberPasswordResetSaving] =
+    useState(false);
+  const [memberPasswordResetError, setMemberPasswordResetError] = useState("");
+  const [memberPasswordResetTarget, setMemberPasswordResetTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [memberPasswordReset, setMemberPasswordReset] = useState<{
+    name: string;
+    password: string;
+  } | null>(null);
+  const [memberPasswordCopied, setMemberPasswordCopied] = useState(false);
   const [memberEditOpen, setMemberEditOpen] = useState(false);
   const [memberEditForm, setMemberEditForm] = useState({
     fname: "",
@@ -3598,6 +3613,74 @@ export function LocationDetailPage() {
   const closeSelectedLocationMemberDetails = () => {
     setMemberDetailsOpen(false);
     setSelectedMemberAction(null);
+  };
+
+  const openSelectedLocationMemberPasswordReset = () => {
+    if (!selectedMemberAction) {
+      return;
+    }
+    setMemberPasswordResetTarget({
+      id: selectedMemberAction.id,
+      name: memberName(
+        accounts,
+        selectedMemberAction.user_id,
+        selectedMemberAction.user_display_name,
+      ),
+    });
+    setMemberPasswordReset(null);
+    setMemberPasswordResetError("");
+    setMemberPasswordCopied(false);
+    setMemberActionAnchor(null);
+    setMemberActionPosition(null);
+    setMemberPasswordResetOpen(true);
+  };
+
+  const resetSelectedLocationMemberPassword = async () => {
+    if (!account || !memberPasswordResetTarget) {
+      return;
+    }
+    setMemberPasswordResetSaving(true);
+    setMemberPasswordResetError("");
+    try {
+      const response = await api.post<{ temporary_password: string }>(
+        `/members/${memberPasswordResetTarget.id}/reset-password`,
+        { requester_id: account.id },
+      );
+      setMemberPasswordReset({
+        name: memberPasswordResetTarget.name,
+        password: response.data.temporary_password,
+      });
+    } catch (requestError) {
+      setMemberPasswordResetError(
+        getApiErrorMessage(requestError, "Failed to reset member password"),
+      );
+    } finally {
+      setMemberPasswordResetSaving(false);
+    }
+  };
+
+  const closeMemberPasswordReset = () => {
+    if (memberPasswordResetSaving) {
+      return;
+    }
+    setMemberPasswordResetOpen(false);
+    setMemberPasswordResetTarget(null);
+    setMemberPasswordReset(null);
+    setMemberPasswordResetError("");
+    setMemberPasswordCopied(false);
+    setSelectedMemberAction(null);
+  };
+
+  const copyMemberTemporaryPassword = async () => {
+    if (!memberPasswordReset) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(memberPasswordReset.password);
+      setMemberPasswordCopied(true);
+    } catch {
+      setMemberPasswordCopied(false);
+    }
   };
 
   const closeRoleActionMenu = () => {
@@ -6221,13 +6304,13 @@ export function LocationDetailPage() {
                   >
                     <Box sx={{ minWidth: 0 }}>
                       <Typography variant="overline" color="text.secondary">
-                        Zone
+                        {term("zone")}
                       </Typography>
                       <Typography
                         variant="h6"
                         sx={{ fontWeight: 800, mt: 0.25 }}
                       >
-                        {zone.title || `Zone #${zone.id}`}
+                        {zone.title || `${term("zone")} #${zone.id}`}
                       </Typography>
                     </Box>
                     {canManageLocationResources ? (
@@ -6392,7 +6475,7 @@ export function LocationDetailPage() {
                   <List dense disablePadding>
                     {[
                       {
-                        label: "Zone",
+                        label: term("zone"),
                         value:
                           zones.find((zone) =>
                             idsEqual(zone.id, family.zone_id),
@@ -6645,8 +6728,8 @@ export function LocationDetailPage() {
                 dense
               >
                 <ListItemText
-                  primary={item.title || `Location #${item.id}`}
-                  secondary={[item.type || "Location", item.is_hq ? "HQ" : ""]
+                  primary={item.title || `${term("location")} #${item.id}`}
+                  secondary={[item.type || term("location"), item.is_hq ? "HQ" : ""]
                     .filter(Boolean)
                     .join(" - ")}
                 />
@@ -6737,7 +6820,7 @@ export function LocationDetailPage() {
           >
             {["Branch", "Office"].map((option) => (
               <MenuItem key={option} value={option}>
-                {option === "Branch" ? term("branches").replace(/es$/i, "") : option}
+                {option === "Branch" ? term("branches") : option}
               </MenuItem>
             ))}
           </TextField>
@@ -10520,13 +10603,13 @@ export function LocationDetailPage() {
                                   variant="overline"
                                   color="text.secondary"
                                 >
-                                  {term("zones").replace(/s$/i, "")}
+                                  {term("zone")}
                                 </Typography>
                                 <Typography
                                   variant="h6"
                                   sx={{ fontWeight: 800, mt: 0.25 }}
                                 >
-                                  {zone.title || `${term("zones").replace(/s$/i, "")} #${zone.id}`}
+                                  {zone.title || `${term("zone")} #${zone.id}`}
                                 </Typography>
                               </Box>
                               {canManageLocationResources ? (
@@ -10854,7 +10937,7 @@ export function LocationDetailPage() {
                                     variant="overline"
                                     color="text.secondary"
                                   >
-                                    {branch.type || term("branches").replace(/es$/i, "")}
+                                    {branch.type || term("branches")}
                                   </Typography>
                                   <Typography
                                     variant="subtitle1"
@@ -10865,7 +10948,7 @@ export function LocationDetailPage() {
                                 </Box>
                                 <IconButton
                                   size="small"
-                                  aria-label={`${term("branches").replace(/es$/i, "")} actions`}
+                                  aria-label={`${term("branches")} actions`}
                                   onClick={(event) => {
                                     setSelectedBranchAction(branch);
                                     setBranchActionAnchor(event.currentTarget);
@@ -13015,6 +13098,14 @@ export function LocationDetailPage() {
           </MenuItem>
         ) : null}
         {isLocationManagerForUi ? (
+          <MenuItem onClick={openSelectedLocationMemberPasswordReset}>
+            <ListItemIcon>
+              <LockResetIcon fontSize="small" />
+            </ListItemIcon>
+            Reset Password
+          </MenuItem>
+        ) : null}
+        {isLocationManagerForUi ? (
           <MenuItem
             onClick={() =>
               requestDeleteConfirmation(
@@ -13047,6 +13138,98 @@ export function LocationDetailPage() {
           </MenuItem>
         ) : null}
       </Menu>
+      <Dialog
+        open={memberPasswordResetOpen}
+        onClose={closeMemberPasswordReset}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {memberPasswordReset ? "New Password Created" : "Reset Password?"}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {memberPasswordReset ? (
+              <>
+                <Alert severity="success">
+                  {memberPasswordReset.name} can now sign in with the password
+                  below. They will be asked to create their own password
+                  straight after signing in.
+                </Alert>
+                <TextField
+                  label="Temporary password"
+                  value={memberPasswordReset.password}
+                  fullWidth
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      sx: { fontFamily: "monospace", fontWeight: 700 },
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Tooltip
+                            title={memberPasswordCopied ? "Copied" : "Copy"}
+                          >
+                            <IconButton
+                              size="small"
+                              aria-label="Copy temporary password"
+                              onClick={() =>
+                                void copyMemberTemporaryPassword()
+                              }
+                            >
+                              {memberPasswordCopied ? (
+                                <CheckIcon fontSize="small" />
+                              ) : (
+                                <ContentCopyIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Copy this password now and share it with the member. It cannot
+                  be shown again.
+                </Typography>
+              </>
+            ) : (
+              <Alert severity="warning">
+                This assigns {memberPasswordResetTarget?.name || "this member"} a
+                new random password and signs them out of any active sessions.
+                Their current password will stop working.
+              </Alert>
+            )}
+            {memberPasswordResetError ? (
+              <Alert severity="error">{memberPasswordResetError}</Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={closeMemberPasswordReset}
+            disabled={memberPasswordResetSaving}
+          >
+            {memberPasswordReset ? "Done" : "Cancel"}
+          </Button>
+          {memberPasswordReset ? null : (
+            <Button
+              variant="contained"
+              onClick={() => void resetSelectedLocationMemberPassword()}
+              disabled={memberPasswordResetSaving}
+              startIcon={
+                memberPasswordResetSaving ? (
+                  <CircularProgress color="inherit" size={16} />
+                ) : (
+                  <LockResetIcon />
+                )
+              }
+            >
+              {memberPasswordResetSaving ? "Resetting..." : "Reset Password"}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={memberDetailsOpen}
         onClose={closeSelectedLocationMemberDetails}
@@ -14846,7 +15029,7 @@ export function LocationDetailPage() {
             >
               <TextField
                 size="small"
-                label={term("particulars").replace(/s$/i, "")}
+                label={singularize(term("particulars"))}
                 value={locationParticularForm.title}
                 onChange={(event) =>
                   setLocationParticularForm((current) => ({
@@ -14953,7 +15136,7 @@ export function LocationDetailPage() {
                   })
                 }
                 getOptionLabel={(particular) =>
-                  particular.title || `${term("particulars").replace(/s$/i, "")} #${particular.particular_id}`
+                  particular.title || `${singularize(term("particulars"))} #${particular.particular_id}`
                 }
                 isOptionEqualToValue={(option, value) =>
                   idsEqual(option.particular_id, value.particular_id)
@@ -14961,7 +15144,7 @@ export function LocationDetailPage() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label={term("particulars").replace(/s$/i, "")}
+                    label={singularize(term("particulars"))}
                     required
                     fullWidth
                   />
@@ -16418,7 +16601,7 @@ function LocationActionDrawer({
     activeTab === 2
       ? "CashBook Name"
       : activeTab === 6
-        ? `${terminology("zones").replace(/s$/i, "")} Name`
+        ? `${terminology("zone")} Name`
         : activeTab === 7
           ? `${terminology("missionalFamilies")} Name`
           : activeTab === 8
@@ -16865,7 +17048,7 @@ function LocationActionDrawer({
             {activeTab === 7 ? (
               <TextField
                 select
-                label={terminology("zones").replace(/s$/i, "")}
+                label={terminology("zone")}
                 value={form.zone_id}
                 onChange={(event) => onChange({ zone_id: event.target.value })}
                 required
@@ -16873,7 +17056,7 @@ function LocationActionDrawer({
               >
                 {zones.map((zone) => (
                   <MenuItem key={zone.id} value={String(zone.id)}>
-                    {zone.title || `${terminology("zones").replace(/s$/i, "")} #${zone.id}`}
+                    {zone.title || `${terminology("zone")} #${zone.id}`}
                   </MenuItem>
                 ))}
               </TextField>
@@ -17060,7 +17243,7 @@ function LocationActionDrawer({
             {activeTab === 9 ? (
                 <TextField
                   label="Type"
-                  value={terminology("branches").replace(/es$/i, "")}
+                  value={singularize(terminology("branches"))}
                   fullWidth
                 slotProps={{ input: { readOnly: true } }}
               />

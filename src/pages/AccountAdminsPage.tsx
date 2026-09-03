@@ -17,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { api, type Account, type Role } from "../lib/api";
+import { useTerminology } from "../lib/terminology";
 
 type RolesPageProps = {
   account: Account;
@@ -28,12 +29,12 @@ type GroupedRole = {
   rows: Role[];
 };
 
-function roleResourceLabel(role: Role) {
+function roleResourceLabel(role: Role, locationTerm: string) {
   if (role.location_title) {
     return role.location_title;
   }
   if (role.location_id) {
-    return `Location #${role.location_id}`;
+    return `${locationTerm} #${role.location_id}`;
   }
   if (role.cashbook_title) {
     return role.cashbook_title;
@@ -65,6 +66,9 @@ function roleDetailRows(role: Role) {
 }
 
 export function RolesPage({ account }: RolesPageProps) {
+  const { term } = useTerminology(
+    account.type !== "Personal" ? account.id : null,
+  );
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -201,7 +205,7 @@ export function RolesPage({ account }: RolesPageProps) {
                           <CheckCircleIcon color="secondary" fontSize="small" />
                         </ListItemIcon>
                         <ListItemText
-                          primary={roleResourceLabel(role)}
+                          primary={roleResourceLabel(role, term("location"))}
                           secondary={
                             <List dense disablePadding sx={{ mt: 0.75 }}>
                               {roleDetailRows(role).map(([label, value]) => (

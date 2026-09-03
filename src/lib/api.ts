@@ -100,6 +100,7 @@ export type Account = {
   address?: string | null;
   status?: string | null;
   profile_picture?: string | null;
+  terminology?: string | null;
   requires_password_change?: boolean | null;
 };
 
@@ -530,4 +531,3 @@ export type ResourceActions = {
   can_view?: boolean;
   can_comment?: boolean;
 };
-

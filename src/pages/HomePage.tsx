@@ -38,6 +38,7 @@ import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../co
 import { PageHeader } from "../components/PageHeader";
 import { ResourceCard } from "../components/ResourceCard";
 import { api, getApiErrorMessage, type Account, type AccountOverview, type Location } from "../lib/api";
+import { useTerminology } from "../lib/terminology";
 
 type HomePageProps = {
   account: Account;
@@ -83,6 +84,9 @@ function LocationsListSkeleton() {
 }
 
 export function HomePage({ account }: HomePageProps) {
+  const { term, termMany } = useTerminology(
+    account.type !== "Personal" ? account.id : null,
+  );
   const [overview, setOverview] = useState<AccountOverview | null>(null);
   const [tab, setTab] = useState(1);
   const [locationSearch, setLocationSearch] = useState("");
@@ -274,12 +278,12 @@ export function HomePage({ account }: HomePageProps) {
               <Tab
                 icon={<BusinessIcon />}
                 iconPosition="start"
-                label={`Your Locations (${overview.owned.locations.length})`}
+                label={`Your ${termMany("location")} (${overview.owned.locations.length})`}
               />
               <Tab
                 icon={<GroupWorkIcon />}
                 iconPosition="start"
-                label={`Assigned Locations (${overview.assigned.locations.length})`}
+                label={`Assigned ${termMany("location")} (${overview.assigned.locations.length})`}
               />
             </Tabs>
             {canCreateLocations ? (
@@ -298,12 +302,12 @@ export function HomePage({ account }: HomePageProps) {
                   setLocationDrawerOpen(true);
                 }}
               >
-                Add Location
+                Add {term("location")}
               </Button>
             ) : null}
           </Stack>
           <TextField
-            label="Search locations"
+            label={`Search ${termMany("location").toLowerCase()}`}
             value={locationSearch}
             onChange={(event) => setLocationSearch(event.target.value)}
             fullWidth
@@ -323,10 +327,12 @@ export function HomePage({ account }: HomePageProps) {
         <EmptyState
           title={
             locationSearch.trim()
-              ? "No matching locations"
-              : tab === 0 ? "No owned locations yet" : "No assigned locations yet"
+              ? `No matching ${termMany("location").toLowerCase()}`
+              : tab === 0
+                ? `No owned ${termMany("location").toLowerCase()} yet`
+                : `No assigned ${termMany("location").toLowerCase()} yet`
           }
-          message="Locations will appear here after they are created or assigned through ministry and location roles."
+          message={`${termMany("location")} will appear here after they are created or assigned through ministry and location roles.`}
         />
       ) : null}
       {filteredLocations.length > 0 ? (
@@ -335,10 +341,10 @@ export function HomePage({ account }: HomePageProps) {
             {filteredLocations.map((location) => (
               <Grid key={location.id} size={{ xs: 12, md: 6, lg: 4 }}>
                 <ResourceCard
-                  title={location.title || `Location #${location.id}`}
+                  title={location.title || `${term("location")} #${location.id}`}
                   icon={<HomeWorkIcon fontSize="large" />}
                   centerHeader
-                  eyebrow={[location.type || "Location", location.is_hq ? "HQ" : ""].filter(Boolean).join(" - ")}
+                  eyebrow={[location.type || term("location"), location.is_hq ? "HQ" : ""].filter(Boolean).join(" - ")}
                   description={location.description}
                   status={location.status}
                   meta={[location.city, location.district, location.country]
@@ -347,7 +353,7 @@ export function HomePage({ account }: HomePageProps) {
                   href={`/app/locations/${location.id}`}
                   actions={tab === 0 ? (
                     <IconButton
-                      aria-label="Location actions"
+                      aria-label={`${term("location")} actions`}
                       size="small"
                       onClick={(event) => {
                         event.preventDefault();
@@ -378,12 +384,12 @@ export function HomePage({ account }: HomePageProps) {
         ) : null}
       </Menu>
       <Dialog open={locationEditOpen} onClose={() => setLocationEditOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Edit Location</DialogTitle>
+        <DialogTitle>Edit {term("location")}</DialogTitle>
         <DialogContent>
           {locationError ? <Alert severity="error" sx={{ mb: 2 }}>{locationError}</Alert> : null}
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Location Name" value={locationForm.title} onChange={(event) => updateLocationForm({ title: event.target.value })} fullWidth required />
-            <TextField select label="Location Type" value={locationForm.type} onChange={(event) => updateLocationForm({ type: event.target.value })} fullWidth>
+            <TextField label={`${term("location")} Name`} value={locationForm.title} onChange={(event) => updateLocationForm({ title: event.target.value })} fullWidth required />
+            <TextField select label={`${term("location")} Type`} value={locationForm.type} onChange={(event) => updateLocationForm({ type: event.target.value })} fullWidth>
               {["Branch", "Campus", "Mission Station", "Office"].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
             </TextField>
             <TextField label="Description" value={locationForm.description} onChange={(event) => updateLocationForm({ description: event.target.value })} multiline minRows={3} fullWidth />
@@ -404,8 +410,8 @@ export function HomePage({ account }: HomePageProps) {
       </Dialog>
       <ConfirmDeleteDialog
         open={locationDeleteOpen}
-        title="Delete Location?"
-        description="This action permanently removes the selected location."
+        title={`Delete ${term("location")}?`}
+        description={`This action permanently removes the selected ${term("location").toLowerCase()}.`}
         error={locationError}
         onCancel={() => setLocationDeleteOpen(false)}
         onConfirm={() => void deleteSelectedLocation()}
@@ -431,10 +437,10 @@ export function HomePage({ account }: HomePageProps) {
       >
         <Box component="form" onSubmit={handleCreateLocation} sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>
-            Add Location
+            Add {term("location")}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-            Create a branch or ministry location for this account.
+            Create a {term("location").toLowerCase()} for this account.
           </Typography>
           {locationError ? (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -465,7 +471,7 @@ export function HomePage({ account }: HomePageProps) {
               />
             ) : null}
             <TextField
-              label="Location Name"
+              label={`${term("location")} Name`}
               value={locationForm.title}
               onChange={(event) => updateLocationForm({ title: event.target.value })}
               required
@@ -473,7 +479,7 @@ export function HomePage({ account }: HomePageProps) {
             />
             <TextField
               select
-              label="Location Type"
+              label={`${term("location")} Type`}
               value={locationForm.type}
               onChange={(event) => updateLocationForm({ type: event.target.value })}
               fullWidth
@@ -527,7 +533,7 @@ export function HomePage({ account }: HomePageProps) {
               />
             </Stack>
             <Button type="submit" variant="contained" disabled={savingLocation}>
-              Create Location
+              Create {term("location")}
             </Button>
           </Stack>
         </Box>
