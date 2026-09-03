@@ -124,7 +124,7 @@ function AuthForm({
         setSuccess("Account created successfully. Login to continue.");
         setForm((currentForm) => ({
           ...currentForm,
-          identifier: currentForm.email || currentForm.username,
+          identifier: currentForm.email,
           password: "",
         }));
         onModeChange("login");
@@ -145,7 +145,7 @@ function AuthForm({
         : undefined;
       setError(
         mode === "login" && status === 401
-          ? "We could not sign you in. Check your email, username, phone number, and password, then try again."
+          ? "We could not sign you in. Check your email, phone number, and password, then try again."
           : getApiErrorMessage(requestError, "Authentication failed"),
       );
     } finally {
@@ -191,7 +191,7 @@ function AuthForm({
             {mode === "login" ? "Login" : "Create account"}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {mode === "login" ? "Use email, username, or phone number." : "Register a ministry organization."}
+            {mode === "login" ? "Use email or phone number." : "Register a ministry organization."}
           </Typography>
           {error ? (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -267,7 +267,7 @@ function AuthForm({
               </>
             ) : (
               <Stack spacing={2}>
-                <TextField label="Email, username, or phone" value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} required fullWidth />
+                <TextField label="Email or phone" value={form.identifier} onChange={(event) => setForm({ ...form, identifier: event.target.value })} required fullWidth />
                 <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "current-password" } }} />
               </Stack>
             )}
