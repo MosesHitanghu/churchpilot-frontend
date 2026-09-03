@@ -129,7 +129,6 @@ import ConfirmDeleteDialog from "../components/ConfirmDeleteDialog";
 import { CustomDataGridToolbar } from "../components/DataGridToolbar";
 import { EmptyState } from "../components/EmptyState";
 import {
-  CityField,
   EmailField,
   GeoFields,
   InternationalPhoneField,
@@ -2645,12 +2644,10 @@ export function LocationDetailPage() {
     owner_id: "",
     title: "",
     type: "Branch",
-    description: "",
     email: "",
     phone_number: "",
     country: "",
     district: "",
-    city: "",
     address: "",
   });
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -2786,12 +2783,10 @@ export function LocationDetailPage() {
   const [locationEditForm, setLocationEditForm] = useState({
     title: "",
     type: "",
-    description: "",
     email: "",
     phone_number: "",
     country: "",
     district: "",
-    city: "",
     address: "",
     reporting_start_date: "",
   });
@@ -2805,12 +2800,10 @@ export function LocationDetailPage() {
       owner_id: "",
       title: "",
       type: "Branch",
-      description: "",
       email: "",
       phone_number: "",
       country: "",
       district: "",
-      city: "",
       address: "",
     });
   };
@@ -5574,12 +5567,10 @@ export function LocationDetailPage() {
           parent_location_id: location.id,
           title: actionForm.title,
           type: actionForm.type || "Branch",
-          description: actionForm.description,
           email: actionForm.email,
           phone_number: actionForm.phone_number,
           country: actionForm.country,
           district: actionForm.district,
-          city: actionForm.city,
           address: actionForm.address,
         });
       }
@@ -5683,12 +5674,10 @@ export function LocationDetailPage() {
     setLocationEditForm({
       title: location.title || "",
       type: location.type || "",
-      description: location.description || "",
       email: location.email || "",
       phone_number: location.phone_number || "",
       country: location.country || "",
       district: location.district || "",
-      city: location.city || "",
       address: location.address || "",
       reporting_start_date: location.reporting_start_date || "",
     });
@@ -6592,7 +6581,7 @@ export function LocationDetailPage() {
       if (!searchValue) {
         return true;
       }
-      return [item.title, item.type, item.city, item.district, item.country]
+      return [item.title, item.type, item.district, item.country]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -6824,39 +6813,23 @@ export function LocationDetailPage() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            label="Description"
-            value={locationForm.description}
-            onChange={(event) =>
-              updateLocationForm({ description: event.target.value })
-            }
-            multiline
-            minRows={3}
-            fullWidth
-          />
           <GeoFields
             country={locationForm.country}
             district={locationForm.district}
-            city={locationForm.city}
+            city=""
             showCity={false}
-            onChange={updateLocationForm}
+            onChange={({ country, district }) =>
+              updateLocationForm({ country, district })
+            }
           />
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <CityField
-              country={locationForm.country}
-              district={locationForm.district}
-              city={locationForm.city}
-              onChange={updateLocationForm}
-            />
-            <TextField
-              label="Address"
-              value={locationForm.address}
-              onChange={(event) =>
-                updateLocationForm({ address: event.target.value })
-              }
-              fullWidth
-            />
-          </Stack>
+          <TextField
+            label="Address"
+            value={locationForm.address}
+            onChange={(event) =>
+              updateLocationForm({ address: event.target.value })
+            }
+            fullWidth
+          />
           <EmailField
             label="Email"
             value={locationForm.email}
@@ -10328,7 +10301,6 @@ export function LocationDetailPage() {
                           value:
                             [
                               location.address,
-                              location.city,
                               location.district,
                               location.country,
                             ]
@@ -10355,19 +10327,6 @@ export function LocationDetailPage() {
                       ))}
                     </List>
                   </Paper>
-                  {location.description ? (
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                      <Typography
-                        variant="subtitle2"
-                        sx={{ fontWeight: 900, mb: 0.75 }}
-                      >
-                        Description
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {location.description}
-                      </Typography>
-                    </Paper>
-                  ) : null}
                   {canEditLocation || canDeleteLocation ? (
                     <Stack
                       direction={{ xs: "column", sm: "row" }}
@@ -10972,16 +10931,6 @@ export function LocationDetailPage() {
                                     ),
                                     label: "Status",
                                     value: branch.status || "Active",
-                                  },
-                                  {
-                                    icon: (
-                                      <LocationOnIcon
-                                        color="secondary"
-                                        fontSize="small"
-                                      />
-                                    ),
-                                    label: "City",
-                                    value: branch.city || "Not set",
                                   },
                                   {
                                     icon: (
@@ -14828,19 +14777,6 @@ export function LocationDetailPage() {
                 fullWidth
               />
               <TextField
-                label="Description"
-                value={locationEditForm.description}
-                onChange={(event) =>
-                  setLocationEditForm((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                multiline
-                minRows={3}
-                fullWidth
-              />
-              <TextField
                 label="Email"
                 value={locationEditForm.email}
                 onChange={(event) =>
@@ -14886,17 +14822,6 @@ export function LocationDetailPage() {
                   fullWidth
                 />
               </Stack>
-              <TextField
-                label="City"
-                value={locationEditForm.city}
-                onChange={(event) =>
-                  setLocationEditForm((current) => ({
-                    ...current,
-                    city: event.target.value,
-                  }))
-                }
-                fullWidth
-              />
               <TextField
                 label="Address"
                 value={locationEditForm.address}
@@ -15246,7 +15171,7 @@ export function LocationDetailPage() {
               <ListItemText
                 primary="Address"
                 secondary={
-                  [location.city, location.district, location.country]
+                  [location.district, location.country]
                     .filter(Boolean)
                     .join(", ") || "Not set"
                 }
@@ -15372,7 +15297,6 @@ function accountOptionLabel(account: Account) {
   return (
     [account.fname, account.lname].filter(Boolean).join(" ") ||
     account.title ||
-    account.username ||
     account.email ||
     `Account #${account.id}`
   );

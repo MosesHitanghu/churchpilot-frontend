@@ -34,7 +34,7 @@ import Grid from "@mui/material/Grid";
 import { type FormEvent, useEffect, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
 import ConfirmDeleteDialog from "../components/ConfirmDeleteDialog";
-import { CityField, EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
+import { EmailField, GeoFields, InternationalPhoneField } from "../components/FormFields";
 import { PageHeader } from "../components/PageHeader";
 import { ResourceCard } from "../components/ResourceCard";
 import { api, getApiErrorMessage, type Account, type AccountOverview, type Location } from "../lib/api";
@@ -102,12 +102,10 @@ export function HomePage({ account }: HomePageProps) {
     owner_id: "",
     title: "",
     type: "Branch",
-    description: "",
     email: "",
     phone_number: "",
     country: "",
     district: "",
-    city: "",
     address: "",
   });
 
@@ -166,12 +164,10 @@ export function HomePage({ account }: HomePageProps) {
         owner_id: "",
         title: "",
         type: "Branch",
-        description: "",
         email: "",
         phone_number: "",
         country: "",
         district: "",
-        city: "",
         address: "",
       });
     } catch (requestError) {
@@ -191,12 +187,10 @@ export function HomePage({ account }: HomePageProps) {
       owner_id: selectedLocation.owner_id || "",
       title: selectedLocation.title || "",
       type: selectedLocation.type || "Branch",
-      description: selectedLocation.description || "",
       email: selectedLocation.email || "",
       phone_number: selectedLocation.phone_number || "",
       country: selectedLocation.country || "",
       district: selectedLocation.district || "",
-      city: selectedLocation.city || "",
       address: selectedLocation.address || "",
     });
     closeLocationMenu();
@@ -249,8 +243,6 @@ export function HomePage({ account }: HomePageProps) {
     || [
       location.title,
       location.type,
-      location.description,
-      location.city,
       location.district,
       location.country,
     ].filter(Boolean).join(" ").toLowerCase().includes(locationSearch.trim().toLowerCase())
@@ -345,9 +337,8 @@ export function HomePage({ account }: HomePageProps) {
                   icon={<HomeWorkIcon fontSize="large" />}
                   centerHeader
                   eyebrow={[location.type || term("location"), location.is_hq ? "HQ" : ""].filter(Boolean).join(" - ")}
-                  description={location.description}
                   status={location.status}
-                  meta={[location.city, location.district, location.country]
+                  meta={[location.district, location.country]
                     .filter(Boolean)
                     .join(", ")}
                   href={`/app/locations/${location.id}`}
@@ -392,7 +383,6 @@ export function HomePage({ account }: HomePageProps) {
             <TextField select label={`${term("location")} Type`} value={locationForm.type} onChange={(event) => updateLocationForm({ type: event.target.value })} fullWidth>
               {["Branch", "Campus", "Mission Station", "Office"].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
             </TextField>
-            <TextField label="Description" value={locationForm.description} onChange={(event) => updateLocationForm({ description: event.target.value })} multiline minRows={3} fullWidth />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -490,14 +480,6 @@ export function HomePage({ account }: HomePageProps) {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Description"
-              value={locationForm.description}
-              onChange={(event) => updateLocationForm({ description: event.target.value })}
-              multiline
-              minRows={3}
-              fullWidth
-            />
             <EmailField
               label="Email"
               value={locationForm.email}
@@ -514,24 +496,16 @@ export function HomePage({ account }: HomePageProps) {
             <GeoFields
               country={locationForm.country}
               district={locationForm.district}
-              city={locationForm.city}
+              city=""
               showCity={false}
-              onChange={updateLocationForm}
+              onChange={({ country, district }) => updateLocationForm({ country, district })}
             />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <CityField
-                country={locationForm.country}
-                district={locationForm.district}
-                city={locationForm.city}
-                onChange={updateLocationForm}
-              />
-              <TextField
-                label="Address"
-                value={locationForm.address}
-                onChange={(event) => updateLocationForm({ address: event.target.value })}
-                fullWidth
-              />
-            </Stack>
+            <TextField
+              label="Address"
+              value={locationForm.address}
+              onChange={(event) => updateLocationForm({ address: event.target.value })}
+              fullWidth
+            />
             <Button type="submit" variant="contained" disabled={savingLocation}>
               Create {term("location")}
             </Button>

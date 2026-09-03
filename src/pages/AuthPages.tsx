@@ -61,7 +61,7 @@ function AuthForm({
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingPasswordAccount, setPendingPasswordAccount] = useState<Account | null>(null);
-  const [passwordForm, setPasswordForm] = useState({ username: "", newPassword: "", confirmPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
   const [accountType] = useState<"Personal" | "Organization">("Organization");
   const [form, setForm] = useState({
     identifier: "",
@@ -69,7 +69,6 @@ function AuthForm({
     confirmPassword: "",
     fname: "",
     lname: "",
-    username: "",
     title: "",
     description: "",
     email: "",
@@ -102,7 +101,6 @@ function AuthForm({
           : {
               fname: accountType === "Personal" ? form.fname : "",
               lname: accountType === "Personal" ? form.lname : "",
-              username: form.username,
               password: form.password,
               title: accountType === "Organization" ? form.title : `${form.fname} ${form.lname}`.trim(),
               description: "",
@@ -169,7 +167,6 @@ function AuthForm({
       const response = await api.post<{ account: Account }>("/auth/change-password", {
         account_id: pendingPasswordAccount.id,
         current_password: form.password,
-        username: passwordForm.username || undefined,
         new_password: passwordForm.newPassword,
       });
       setSessionAccount(response.data.account);
@@ -205,7 +202,6 @@ function AuthForm({
           ) : null}
           {pendingPasswordAccount ? (
             <Stack component="form" spacing={2} sx={{ mt: 3 }} onSubmit={handlePasswordChange}>
-              <TextField label="Username" value={passwordForm.username} onChange={(event) => setPasswordForm((current) => ({ ...current, username: event.target.value }))} required={!pendingPasswordAccount.username} fullWidth />
               <PasswordField label="New Password" value={passwordForm.newPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))} required fullWidth />
               <PasswordField label="Confirm Password" value={passwordForm.confirmPassword} onValueChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
               <Button type="submit" variant="contained" size="large" disabled={loading}>
@@ -248,10 +244,7 @@ function AuthForm({
                     <TextField label="Organization Name" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required fullWidth />
                   </>
                 )}
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <TextField label="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} required fullWidth />
-                  <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
-                </Stack>
+                <PasswordField label="Password" value={form.password} onValueChange={(value) => setForm({ ...form, password: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
                 <PasswordField label="Confirm Password" value={form.confirmPassword} onValueChange={(value) => setForm({ ...form, confirmPassword: value })} required fullWidth slotProps={{ htmlInput: { autoComplete: "new-password" } }} />
                 <GeoFields
                   country={form.country}

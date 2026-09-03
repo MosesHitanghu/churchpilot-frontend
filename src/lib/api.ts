@@ -83,7 +83,6 @@ export type Account = {
   id: string;
   fname?: string | null;
   lname?: string | null;
-  username?: string | null;
   title?: string | null;
   email?: string | null;
   phone_number?: string | null;
@@ -107,13 +106,11 @@ export type Account = {
 export type Location = {
   id: string;
   title?: string | null;
-  description?: string | null;
   type?: string | null;
   email?: string | null;
   phone_number?: string | null;
   country?: string | null;
   district?: string | null;
-  city?: string | null;
   status?: string | null;
   is_hq?: boolean | null;
   owner_id?: string | null;

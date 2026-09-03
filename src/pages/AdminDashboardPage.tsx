@@ -93,7 +93,6 @@ type AdminLocationSummary = {
   id: string;
   title?: string | null;
   type?: string | null;
-  city?: string | null;
   district?: string | null;
   country?: string | null;
   status?: string | null;
@@ -506,7 +505,7 @@ export function AdminDashboardPage() {
                     <Paper variant="outlined" sx={{ height: "100%", p: 2 }}>
                       <Stack spacing={1.5}>
                         <Typography variant="h6" sx={{ fontWeight: 900 }}>{location.title || "Location"}</Typography>
-                        <Typography variant="body2" color="text.secondary">{[location.type, location.city, location.country].filter(Boolean).join(" - ") || "Location"}</Typography>
+                        <Typography variant="body2" color="text.secondary">{[location.type, location.district, location.country].filter(Boolean).join(" - ") || "Location"}</Typography>
                         <BorderedDetails rows={locationRows(location)} />
                       </Stack>
                     </Paper>

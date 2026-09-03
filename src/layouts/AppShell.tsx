@@ -113,7 +113,7 @@ export function AppShell({ account, onLogout, themeMode, onToggleTheme, onAccoun
   const visibleNavItems = navItems.filter((item) => item.label !== "Roles" || account.type === "Personal");
   const canCustomizeTerminology = account.type !== "Personal";
   const { term } = useTerminology(canCustomizeTerminology ? account.id : null);
-  const accountFullName = [account.fname, account.lname].filter(Boolean).join(" ") || account.title || account.username || "Account";
+  const accountFullName = [account.fname, account.lname].filter(Boolean).join(" ") || account.title || "Account";
   const currentPageTitle = (() => {
     if (/^\/app\/cashbooks\/[^/]+$/.test(location.pathname)) {
       return "CashBook";
@@ -757,7 +757,6 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
   const [form, setForm] = useState({
     fname: "",
     lname: "",
-    username: "",
     title: "",
     email: "",
     phone_number: "",
@@ -782,7 +781,6 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
     setForm({
       fname: account.fname || "",
       lname: account.lname || "",
-      username: account.username || "",
       title: account.title || "",
       email: account.email || "",
       phone_number: account.phone_number || "",
@@ -885,7 +883,6 @@ function ProfileDrawer({ account, open, onClose, onAccountUpdated }: ProfileDraw
             </Stack>
           ) : null}
           <TextField label="Account Title" value={form.title} onChange={(event) => updateForm({ title: event.target.value })} fullWidth />
-          <TextField label="Username" value={form.username} onChange={(event) => updateForm({ username: event.target.value })} fullWidth />
           <TextField select label="Account Type" value={form.type} onChange={(event) => updateForm({ type: event.target.value, category: event.target.value === "Personal" ? "" : "Ministry" })} fullWidth>
             {accountTypes.map((option) => (
               <MenuItem key={option} value={option}>{option}</MenuItem>
