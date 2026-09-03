@@ -381,7 +381,7 @@ export function HomePage({ account }: HomePageProps) {
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label={`${term("location")} Name`} value={locationForm.title} onChange={(event) => updateLocationForm({ title: event.target.value })} fullWidth required />
             <TextField select label={`${term("location")} Type`} value={locationForm.type} onChange={(event) => updateLocationForm({ type: event.target.value })} fullWidth>
-              {["Branch", "Campus", "Mission Station", "Office"].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+              {["Branch", "Office"].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
             </TextField>
           </Stack>
         </DialogContent>
@@ -474,7 +474,7 @@ export function HomePage({ account }: HomePageProps) {
               onChange={(event) => updateLocationForm({ type: event.target.value })}
               fullWidth
             >
-              {["Branch", "Campus", "Mission Station", "Office"].map((option) => (
+              {["Branch", "Office"].map((option) => (
                 <MenuItem key={option} value={option}>
                   {option}
                 </MenuItem>

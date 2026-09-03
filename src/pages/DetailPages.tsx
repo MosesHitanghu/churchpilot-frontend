@@ -6809,7 +6809,7 @@ export function LocationDetailPage() {
           >
             {["Branch", "Office"].map((option) => (
               <MenuItem key={option} value={option}>
-                {option === "Branch" ? term("branches") : option}
+                {option}
               </MenuItem>
             ))}
           </TextField>
